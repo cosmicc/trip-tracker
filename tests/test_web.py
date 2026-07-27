@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.testclient import TestClient
 
-from mileage_logger import __version__
-from mileage_logger.app import app
-from mileage_logger.config import Settings
-from mileage_logger.database import get_db
-from mileage_logger.models import (
+from trip_tracker import __version__
+from trip_tracker.app import app
+from trip_tracker.config import Settings
+from trip_tracker.database import get_db
+from trip_tracker.models import (
     AUTOMATIC_TRIP_PROCESSING_CHECKPOINT,
     Base,
     CloudflareIPBlock,
@@ -33,35 +33,35 @@ from mileage_logger.models import (
     TripProcessingCheckpoint,
     WebLoginAudit,
 )
-from mileage_logger.services.app_health import AppHealthIssue, AppHealthSnapshot
-from mileage_logger.services.backups import create_automatic_backup, list_automatic_backup_files
-from mileage_logger.services.cloudflare_blocks import (
+from trip_tracker.services.app_health import AppHealthIssue, AppHealthSnapshot
+from trip_tracker.services.backups import create_automatic_backup, list_automatic_backup_files
+from trip_tracker.services.cloudflare_blocks import (
     CloudflareAccessRule,
     CloudflareBlockError,
     create_cloudflare_ip_block,
     ip_is_allowlisted,
 )
-from mileage_logger.services.diagnostics import (
+from trip_tracker.services.diagnostics import (
     paginated_owntracks_entries,
     recent_owntracks_entries,
 )
-from mileage_logger.services.gas_prices import AaaMichiganGasPriceProvider, GasPriceReading
-from mileage_logger.services.login_failures import (
+from trip_tracker.services.gas_prices import AaaMichiganGasPriceProvider, GasPriceReading
+from trip_tracker.services.login_failures import (
     tail_login_failure_entries,
     tail_login_success_entries,
 )
-from mileage_logger.services.mileage import (
+from trip_tracker.services.mileage import (
     MANUAL_TRIP_NOTE,
     WAYPOINT_TRIP_NOTE,
     haversine_miles,
 )
-from mileage_logger.services.runtime_status import (
+from trip_tracker.services.runtime_status import (
     RuntimeDatabaseStatus,
     RuntimeStatus,
     build_runtime_status,
 )
-from mileage_logger.web.auth import FAILED_LOGIN_ATTEMPTS
-from mileage_logger.web.routes import (
+from trip_tracker.web.auth import FAILED_LOGIN_ATTEMPTS
+from trip_tracker.web.routes import (
     _current_year_month,
     _dashboard_distance_summary,
     _dashboard_reimbursement_summary,
@@ -148,9 +148,9 @@ def test_database_outage_renders_limp_mode_page(monkeypatch) -> None:
         yield
 
     runtime_status = _runtime_status(database_available=False)
-    monkeypatch.setattr("mileage_logger.app.settings", settings)
+    monkeypatch.setattr("trip_tracker.app.settings", settings)
     monkeypatch.setattr(
-        "mileage_logger.app.build_runtime_status",
+        "trip_tracker.app.build_runtime_status",
         lambda _settings, *, database_available: runtime_status,
     )
     app.dependency_overrides[get_db] = offline_get_db
@@ -158,7 +158,7 @@ def test_database_outage_renders_limp_mode_page(monkeypatch) -> None:
         response = TestClient(app).get("/diagnostics")
 
         assert response.status_code == 200
-        assert response.headers["X-Mileage-Logger-Limp-Mode"] == "true"
+        assert response.headers["X-Trip-Tracker-Limp-Mode"] == "true"
         assert "Limp Mode" not in response.text
         assert "Database Unreachable" not in response.text
         assert "Service Temporarily Unavailable" in response.text
@@ -170,7 +170,7 @@ def test_database_outage_renders_limp_mode_page(monkeypatch) -> None:
         assert '<header class="topbar">' not in response.text
         assert '<div class="brand"' not in response.text
         assert '<nav aria-label="Primary navigation">' not in response.text
-        assert "/static/icons/mileage-logger-icon.svg" not in response.text
+        assert "/static/icons/trip-tracker-icon.svg" not in response.text
         assert 'rel="manifest" href="/manifest.webmanifest"' not in response.text
         assert 'rel="apple-touch-icon" href="/apple-touch-icon.png"' not in response.text
         assert 'navigator.serviceWorker.register("/service-worker.js"' not in response.text
@@ -209,9 +209,9 @@ def test_database_outage_content_fetch_renders_limp_mode_fragment(monkeypatch) -
         yield
 
     runtime_status = _runtime_status(database_available=False)
-    monkeypatch.setattr("mileage_logger.app.settings", settings)
+    monkeypatch.setattr("trip_tracker.app.settings", settings)
     monkeypatch.setattr(
-        "mileage_logger.app.build_runtime_status",
+        "trip_tracker.app.build_runtime_status",
         lambda _settings, *, database_available: runtime_status,
     )
     app.dependency_overrides[get_db] = offline_get_db
@@ -222,7 +222,7 @@ def test_database_outage_content_fetch_renders_limp_mode_fragment(monkeypatch) -
         )
 
         assert response.status_code == 200
-        assert response.headers["X-Mileage-Logger-Limp-Mode"] == "true"
+        assert response.headers["X-Trip-Tracker-Limp-Mode"] == "true"
         assert "Service Temporarily Unavailable" in response.text
         assert "The application is currently offline." in response.text
         assert "Database Unreachable" not in response.text
@@ -256,13 +256,13 @@ def test_database_outage_limp_mode_hides_top_navigation(
         web_login_password="secret-password",
     )
     runtime_status = _runtime_status(database_available=False)
-    monkeypatch.setattr("mileage_logger.app.settings", settings)
+    monkeypatch.setattr("trip_tracker.app.settings", settings)
     monkeypatch.setattr(
-        "mileage_logger.app.build_runtime_status",
+        "trip_tracker.app.build_runtime_status",
         lambda _settings, *, database_available: runtime_status,
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
 
     def offline_get_db():
         raise OperationalError("SELECT 1", {}, Exception("database offline"))
@@ -284,7 +284,7 @@ def test_database_outage_limp_mode_hides_top_navigation(
 
         assert login_response.status_code == 303
         assert response.status_code == 200
-        assert response.headers["X-Mileage-Logger-Limp-Mode"] == "true"
+        assert response.headers["X-Trip-Tracker-Limp-Mode"] == "true"
         assert '<header class="topbar">' not in response.text
         assert '<div class="brand"' not in response.text
         assert '<nav aria-label="Primary navigation">' not in response.text
@@ -302,13 +302,13 @@ def test_database_outage_limp_mode_hides_top_navigation(
 def test_runtime_status_classifies_postgresql_remote_and_local() -> None:
     remote_status = build_runtime_status(
         Settings(
-            database_url="postgresql+psycopg://mileage:secret@db.internal:5432/mileage_logger",
+            database_url="postgresql+psycopg://triptracker:secret@db.internal:5432/trip_tracker",
         ),
         database_available=True,
     )
     local_status = build_runtime_status(
         Settings(
-            database_url="postgresql+psycopg://mileage:secret@postgres:5432/mileage_logger",
+            database_url="postgresql+psycopg://triptracker:secret@postgres:5432/trip_tracker",
         ),
         database_available=False,
     )
@@ -536,7 +536,7 @@ def test_web_login_redirects_browser_pages_when_configured(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
     client, _ = _test_client_session()
     try:
         response = client.get("/trips?year=2026&month=6", follow_redirects=False)
@@ -556,7 +556,7 @@ def test_web_login_leaves_api_routes_open(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
     client, _ = _test_client_session()
     try:
         response = client.get("/api/health")
@@ -576,8 +576,8 @@ def test_web_login_accepts_configured_credentials(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session(client_host="172.18.0.5")
     try:
         login_response = client.post(
@@ -617,8 +617,8 @@ def test_web_login_rejects_invalid_credentials(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session(client_host="172.18.0.5")
     try:
         login_response = client.post(
@@ -653,8 +653,8 @@ def test_web_login_records_failed_attempt_audit_log(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session(client_host="172.18.0.5")
     try:
         response = client.post(
@@ -702,8 +702,8 @@ def test_web_login_uses_cloudflare_client_ip_when_header_is_present(
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session(client_host="203.0.113.88")
     try:
         response = client.post(
@@ -850,14 +850,14 @@ def test_web_login_page_does_not_disclose_app_name(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, _ = _test_client_session()
     try:
         response = client.get("/login")
 
         assert response.status_code == 200
-        assert "Mileage Logger" not in response.text
+        assert "Trip Tracker" not in response.text
         assert "Mileage" not in response.text
         assert ">ML<" not in response.text
         assert 'name="application-name"' not in response.text
@@ -865,7 +865,7 @@ def test_web_login_page_does_not_disclose_app_name(monkeypatch) -> None:
         assert 'rel="manifest" href="/manifest.webmanifest"' not in response.text
         assert 'rel="icon"' not in response.text
         assert 'rel="apple-touch-icon" href="/apple-touch-icon.png"' not in response.text
-        assert "/static/icons/mileage-logger" not in response.text
+        assert "/static/icons/trip-tracker" not in response.text
         assert "<title>Sign In</title>" in response.text
     finally:
         FAILED_LOGIN_ATTEMPTS.clear()
@@ -879,8 +879,8 @@ def test_public_device_checkbox_disables_and_restores_device_sign_in(monkeypatch
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -921,9 +921,9 @@ def test_public_device_session_expires_and_clears_browser_data(monkeypatch) -> N
         web_login_password="secret-password",
     )
     current_time = [1_000.0]
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.auth.time.time", lambda: current_time[0])
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.time.time", lambda: current_time[0])
     client, _ = _test_client_session()
     try:
         login_response = client.post(
@@ -949,7 +949,7 @@ def test_public_device_session_expires_and_clears_browser_data(monkeypatch) -> N
         assert expired_response.status_code == 303
         assert expired_response.headers["location"] == "/login?public_timeout=1"
         assert expired_response.headers["clear-site-data"] == '"cache", "cookies", "storage"'
-        assert "mileage_logger_session=null" in expired_response.headers["set-cookie"]
+        assert "trip_tracker_session=null" in expired_response.headers["set-cookie"]
     finally:
         app.dependency_overrides.clear()
 
@@ -961,8 +961,8 @@ def test_passkey_login_rejects_public_device_mode(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, _ = _test_client_session()
     try:
         response = client.post(
@@ -986,8 +986,8 @@ def test_login_page_shows_device_sign_in_when_passkey_exists(monkeypatch) -> Non
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -1021,8 +1021,8 @@ def test_passkey_login_options_stay_open_and_use_browser_origin(monkeypatch) -> 
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -1060,8 +1060,8 @@ def test_passkey_login_verify_authenticates_session(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -1080,7 +1080,7 @@ def test_passkey_login_verify_authenticates_session(monkeypatch) -> None:
             return db.get(PasskeyCredential, passkey_id)
 
         monkeypatch.setattr(
-            "mileage_logger.web.routes.finish_passkey_authentication",
+            "trip_tracker.web.routes.finish_passkey_authentication",
             verify_passkey,
         )
         verify_response = client.post(
@@ -1117,17 +1117,17 @@ def test_failed_passkey_login_records_audit_entry(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         def reject_passkey(_db, _request, _payload):
-            from mileage_logger.services.passkeys import PasskeyCeremonyError
+            from trip_tracker.services.passkeys import PasskeyCeremonyError
 
             raise PasskeyCeremonyError("invalid")
 
         monkeypatch.setattr(
-            "mileage_logger.web.routes.finish_passkey_authentication",
+            "trip_tracker.web.routes.finish_passkey_authentication",
             reject_passkey,
         )
         response = client.post(
@@ -1154,10 +1154,10 @@ def test_web_layout_includes_mobile_install_metadata(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, _ = _test_client_session()
@@ -1180,7 +1180,7 @@ def test_web_layout_includes_mobile_install_metadata(monkeypatch) -> None:
             in response.text
         )
         assert 'data-dashboard-content-url="/dashboard/content"' in response.text
-        assert 'response.headers.get("X-Mileage-Logger-Limp-Mode") === "true"' in response.text
+        assert 'response.headers.get("X-Trip-Tracker-Limp-Mode") === "true"' in response.text
         assert 'window.location.replace("/")' in response.text
         assert (
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -1194,10 +1194,10 @@ def test_web_layout_includes_mobile_install_metadata(monkeypatch) -> None:
         )
         assert 'rel="manifest" href="/manifest.webmanifest"' in response.text
         assert 'rel="apple-touch-icon" href="/apple-touch-icon.png"' in response.text
-        assert "/static/icons/mileage-logger-icon.svg" in response.text
-        assert "/static/icons/mileage-logger-brand.png" in response.text
-        assert '<div class="brand" aria-label="Mileage Logger">' in response.text
-        assert '<span class="brand-title">Mileage Logger</span>' in response.text
+        assert "/static/icons/trip-tracker-icon.svg" in response.text
+        assert "/static/icons/trip-tracker-brand.png" in response.text
+        assert '<div class="brand" aria-label="Trip Tracker">' in response.text
+        assert '<span class="brand-title">Trip Tracker</span>' in response.text
         assert f'<span class="brand-version">v{__version__}</span>' in response.text
         assert '<a class="brand" href="/">' not in response.text
         assert '<nav aria-label="Primary navigation">' in response.text
@@ -1255,8 +1255,8 @@ def test_login_page_has_no_top_navigation_for_unauthenticated_session(
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, _ = _test_client_session()
     try:
         response = client.get("/login")
@@ -1279,7 +1279,7 @@ def test_trips_page_renders_loading_shell() -> None:
         assert response.status_code == 200
         assert "Loading selected-month cards and work trip records." in response.text
         assert 'data-trips-content-url="/trips/content?year=2026&amp;month=6"' in response.text
-        assert 'response.headers.get("X-Mileage-Logger-Limp-Mode") === "true"' in response.text
+        assert 'response.headers.get("X-Trip-Tracker-Limp-Mode") === "true"' in response.text
         assert 'window.location.replace("/")' in response.text
         assert "Monthly Work Trips" not in response.text
     finally:
@@ -1339,7 +1339,7 @@ def test_install_assets_stay_available_when_web_login_is_enabled(monkeypatch) ->
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
     client, _ = _test_client_session()
     try:
         manifest_response = client.get("/manifest.webmanifest", follow_redirects=False)
@@ -1347,11 +1347,11 @@ def test_install_assets_stay_available_when_web_login_is_enabled(monkeypatch) ->
         favicon_response = client.get("/favicon.ico", follow_redirects=False)
         apple_icon_response = client.get("/apple-touch-icon.png", follow_redirects=False)
         brand_icon_response = client.get(
-            "/static/icons/mileage-logger-brand.png",
+            "/static/icons/trip-tracker-brand.png",
             follow_redirects=False,
         )
         svg_icon_response = client.get(
-            "/static/icons/mileage-logger-icon.svg",
+            "/static/icons/trip-tracker-icon.svg",
             follow_redirects=False,
         )
 
@@ -1364,7 +1364,7 @@ def test_install_assets_stay_available_when_web_login_is_enabled(monkeypatch) ->
         assert manifest["scope"] == "/"
         assert manifest_response.headers["cache-control"] == "no-store"
         assert {icon["purpose"] for icon in manifest["icons"]} == {"any", "maskable"}
-        assert "/static/icons/mileage-logger-icon-512.png?v=1.3.2-icon5" in {
+        assert "/static/icons/trip-tracker-icon-512.png?v=1.5.0-brand1" in {
             icon["src"] for icon in manifest["icons"]
         }
 
@@ -1399,10 +1399,10 @@ def test_dashboard_shows_today_and_month_distance_totals(monkeypatch) -> None:
         0,
         tzinfo=ZoneInfo("America/Detroit"),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.local_now", lambda: dashboard_now)
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: dashboard_now.date())
+    monkeypatch.setattr("trip_tracker.web.routes.local_now", lambda: dashboard_now)
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: dashboard_now.date())
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, session_factory = _test_client_session()
@@ -1544,10 +1544,10 @@ def test_dashboard_count_cards_reset_at_detroit_month_boundary(monkeypatch) -> N
         30,
         tzinfo=ZoneInfo("America/Detroit"),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.local_now", lambda: dashboard_now)
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: dashboard_now.date())
+    monkeypatch.setattr("trip_tracker.web.routes.local_now", lambda: dashboard_now)
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: dashboard_now.date())
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, session_factory = _test_client_session()
@@ -1717,8 +1717,8 @@ def test_dashboard_replaces_waypoints_card_with_month_reimbursement(monkeypatch)
         0,
         tzinfo=ZoneInfo("America/Detroit"),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.local_now", lambda: dashboard_now)
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: dashboard_now.date())
+    monkeypatch.setattr("trip_tracker.web.routes.local_now", lambda: dashboard_now)
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: dashboard_now.date())
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -1863,10 +1863,10 @@ def test_dashboard_trip_plus_non_trip_total_is_never_below_trip_total(monkeypatc
         0,
         tzinfo=ZoneInfo("America/Detroit"),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.local_now", lambda: dashboard_now)
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: dashboard_now.date())
+    monkeypatch.setattr("trip_tracker.web.routes.local_now", lambda: dashboard_now)
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: dashboard_now.date())
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, session_factory = _test_client_session()
@@ -1930,10 +1930,10 @@ def test_dashboard_keeps_today_distance_until_local_midnight(monkeypatch) -> Non
     )
     current_day = dashboard_now.date()
     next_day = current_day + timedelta(days=1)
-    monkeypatch.setattr("mileage_logger.web.routes.local_now", lambda: dashboard_now)
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: current_day)
+    monkeypatch.setattr("trip_tracker.web.routes.local_now", lambda: dashboard_now)
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: current_day)
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, session_factory = _test_client_session()
@@ -2046,10 +2046,10 @@ def test_dashboard_distance_totals_ignore_manual_odometer_reset(monkeypatch) -> 
         0,
         tzinfo=ZoneInfo("America/Detroit"),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.local_now", lambda: dashboard_now)
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: dashboard_now.date())
+    monkeypatch.setattr("trip_tracker.web.routes.local_now", lambda: dashboard_now)
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: dashboard_now.date())
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, session_factory = _test_client_session()
@@ -2137,7 +2137,7 @@ def test_dashboard_distance_totals_ignore_manual_odometer_reset(monkeypatch) -> 
 
 def test_dashboard_replaces_vehicle_mpg_with_location_state(monkeypatch) -> None:
     monkeypatch.setattr(
-        "mileage_logger.web.routes._monthly_gas_context",
+        "trip_tracker.web.routes._monthly_gas_context",
         lambda _db, _year, _month: (None, ""),
     )
     client, session_factory = _test_client_session()
@@ -2185,8 +2185,8 @@ def test_web_login_temporarily_locks_repeated_failures(monkeypatch) -> None:
         web_login_max_attempts=2,
         web_login_lockout_seconds=300,
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         for _ in range(2):
@@ -2250,10 +2250,10 @@ def test_web_login_auto_blocks_cloudflare_ip_after_five_consecutive_failures(
         assert "5 consecutive failed web login attempts" in note
         return CloudflareAccessRule(rule_id="cf-rule-1", ip_address=ip_address)
 
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "mileage_logger.web.routes.create_cloudflare_ip_block",
+        "trip_tracker.web.routes.create_cloudflare_ip_block",
         fake_create_cloudflare_ip_block,
     )
     client, session_factory = _test_client_session(client_host="172.18.0.5")
@@ -2306,10 +2306,10 @@ def test_cloudflare_header_controls_auto_block_when_present(
         assert "2 consecutive failed web login attempts" in note
         return CloudflareAccessRule(rule_id="cf-rule-1", ip_address=ip_address)
 
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "mileage_logger.web.routes.create_cloudflare_ip_block",
+        "trip_tracker.web.routes.create_cloudflare_ip_block",
         fake_create_cloudflare_ip_block,
     )
     client, session_factory = _test_client_session(client_host="203.0.113.88")
@@ -2357,10 +2357,10 @@ def test_successful_web_login_resets_consecutive_failures_before_auto_block(
     def fail_create_cloudflare_ip_block(ip_address: str, *, note: str, settings: Settings):
         raise AssertionError(f"unexpected block for {ip_address}: {note}")
 
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "mileage_logger.web.routes.create_cloudflare_ip_block",
+        "trip_tracker.web.routes.create_cloudflare_ip_block",
         fail_create_cloudflare_ip_block,
     )
     client, session_factory = _test_client_session(client_host="172.18.0.5")
@@ -2440,11 +2440,11 @@ def test_create_cloudflare_ip_block_sends_zone_access_rule_payload(monkeypatch) 
         captured_request["timeout"] = timeout
         return FakeResponse()
 
-    monkeypatch.setattr("mileage_logger.services.cloudflare_blocks.httpx.post", fake_post)
+    monkeypatch.setattr("trip_tracker.services.cloudflare_blocks.httpx.post", fake_post)
 
     result = create_cloudflare_ip_block(
         "203.0.113.44",
-        note="Mileage Logger manual block",
+        note="Trip Tracker manual block",
         settings=settings,
     )
 
@@ -2456,7 +2456,7 @@ def test_create_cloudflare_ip_block_sends_zone_access_rule_payload(monkeypatch) 
     assert captured_request["json"] == {
         "mode": "block",
         "configuration": {"target": "ip", "value": "203.0.113.44"},
-        "notes": "Mileage Logger manual block",
+        "notes": "Trip Tracker manual block",
     }
 
 
@@ -2481,12 +2481,12 @@ def test_create_cloudflare_ip_block_explains_authentication_error(monkeypatch) -
     def fake_post(url, *, headers, json, timeout):
         return FakeResponse()
 
-    monkeypatch.setattr("mileage_logger.services.cloudflare_blocks.httpx.post", fake_post)
+    monkeypatch.setattr("trip_tracker.services.cloudflare_blocks.httpx.post", fake_post)
 
     try:
         create_cloudflare_ip_block(
             "203.0.113.44",
-            note="Mileage Logger manual block",
+            note="Trip Tracker manual block",
             settings=settings,
         )
     except CloudflareBlockError as exc:
@@ -2676,7 +2676,7 @@ def test_diagnostics_shows_failed_login_attempts_without_footer_actions(
         "lockout_remaining_seconds": 0,
     }
     monkeypatch.setattr(
-        "mileage_logger.web.routes.get_settings",
+        "trip_tracker.web.routes.get_settings",
         lambda: Settings(database_url="sqlite://"),
     )
     client, session_factory = _test_client_session()
@@ -2710,7 +2710,7 @@ def test_diagnostics_shows_failed_login_attempts_without_footer_actions(
         assert download_response.status_code == 200
         assert "web_login_failed" in download_response.text
         assert "attachment" in download_response.headers["content-disposition"]
-        assert "mileage-logger-login-audits.jsonl" in download_response.headers[
+        assert "trip-tracker-login-audits.jsonl" in download_response.headers[
             "content-disposition"
         ]
         assert download_response.headers["cache-control"] == "no-store"
@@ -2779,7 +2779,7 @@ def test_diagnostics_paginates_failed_logins_and_cloudflare_blocks(
             )
         )
     monkeypatch.setattr(
-        "mileage_logger.web.routes.get_settings",
+        "trip_tracker.web.routes.get_settings",
         lambda: Settings(database_url="sqlite://"),
     )
     client, session_factory = _test_client_session()
@@ -2939,7 +2939,7 @@ def test_diagnostics_failed_login_block_button_uses_resolved_client_ip(
         cloudflare_api_token="token",
         cloudflare_zone_id="zone",
     )
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -2969,8 +2969,8 @@ def test_diagnostics_passkey_card_lists_registers_and_removes_passkeys(
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -3065,8 +3065,8 @@ def test_diagnostics_hides_failed_login_entry_without_deleting_audit(
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -3157,14 +3157,14 @@ def test_diagnostics_cloudflare_block_buttons_create_and_remove_app_managed_bloc
     def fake_delete_cloudflare_ip_block(rule_id: str, *, settings: Settings):
         deleted_rule_ids.append(rule_id)
 
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "mileage_logger.web.routes.create_cloudflare_ip_block",
+        "trip_tracker.web.routes.create_cloudflare_ip_block",
         fake_create_cloudflare_ip_block,
     )
     monkeypatch.setattr(
-        "mileage_logger.web.routes.delete_cloudflare_ip_block",
+        "trip_tracker.web.routes.delete_cloudflare_ip_block",
         fake_delete_cloudflare_ip_block,
     )
     client, session_factory = _test_client_session()
@@ -3240,10 +3240,10 @@ def test_diagnostics_manual_cloudflare_block_form_validates_and_records_reason(
             ip_address=ip_address,
         )
 
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "mileage_logger.web.routes.create_cloudflare_ip_block",
+        "trip_tracker.web.routes.create_cloudflare_ip_block",
         fake_create_cloudflare_ip_block,
     )
     client, session_factory = _test_client_session()
@@ -3308,7 +3308,7 @@ def test_diagnostics_manual_cloudflare_block_form_validates_and_records_reason(
         assert created_requests == [
             (
                 "198.51.100.77",
-                "Mileage Logger manual block: Manual abuse report",
+                "Trip Tracker manual block: Manual abuse report",
             )
         ]
         with session_factory() as db:
@@ -3337,8 +3337,8 @@ def test_diagnostics_full_backup_download_and_restore_round_trip(monkeypatch) ->
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         login_response = client.post(
@@ -3384,8 +3384,8 @@ def test_diagnostics_full_backup_download_and_restore_round_trip(monkeypatch) ->
         )
         assert backup_response.status_code == 200
         assert backup_response.headers["cache-control"] == "no-store"
-        assert "mileage-logger-full-backup" in backup_response.headers["content-disposition"]
-        assert payload["format"] == "mileage_logger.full_backup"
+        assert "trip-tracker-full-backup" in backup_response.headers["content-disposition"]
+        assert payload["format"] == "trip_tracker.full_backup"
         assert payload["table_counts"]["sites"] == 1
         assert payload["owntracks_waypoints"]["waypoints"][0]["desc"] == "Client"
 
@@ -3408,7 +3408,7 @@ def test_diagnostics_full_backup_download_and_restore_round_trip(monkeypatch) ->
             data={"confirmation": "RESTORE"},
             files={
                 "backup_file": (
-                    "mileage-logger-full-backup.json.gz",
+                    "trip-tracker-full-backup.json.gz",
                     backup_response.content,
                     "application/gzip",
                 )
@@ -3442,8 +3442,8 @@ def test_diagnostics_restores_retained_automatic_backup(monkeypatch, tmp_path) -
         web_login_password="secret-password",
         automatic_backup_dir=str(tmp_path / "backups"),
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         login_response = client.post(
@@ -3473,7 +3473,7 @@ def test_diagnostics_restores_retained_automatic_backup(monkeypatch, tmp_path) -
         assert diagnostics_response.status_code == 200
         assert "Automatic Backups" in diagnostics_response.text
         assert backup_result.backup_file.reason == "startup"
-        assert "mileage-logger-auto-backup-startup-20260620-120000Z.json.gz" == (
+        assert "trip-tracker-auto-backup-startup-20260620-120000Z.json.gz" == (
             backup_result.backup_file.filename
         )
         assert backup_result.backup_file.filename in diagnostics_response.text
@@ -3553,13 +3553,13 @@ def test_automatic_backup_retention_keeps_one_day_of_six_hour_and_prior_daily(
     retained_filenames = {backup.filename for backup in retained_backups}
 
     assert len(retained_backups) == 6
-    assert "mileage-logger-auto-backup-20260617-160000Z.json.gz" not in retained_filenames
-    assert "mileage-logger-auto-backup-20260618-100000Z.json.gz" not in retained_filenames
-    assert "mileage-logger-auto-backup-20260618-220000Z.json.gz" in retained_filenames
-    assert "mileage-logger-auto-backup-20260619-100000Z.json.gz" not in retained_filenames
-    assert "mileage-logger-auto-backup-20260619-220000Z.json.gz" in retained_filenames
+    assert "trip-tracker-auto-backup-20260617-160000Z.json.gz" not in retained_filenames
+    assert "trip-tracker-auto-backup-20260618-100000Z.json.gz" not in retained_filenames
+    assert "trip-tracker-auto-backup-20260618-220000Z.json.gz" in retained_filenames
+    assert "trip-tracker-auto-backup-20260619-100000Z.json.gz" not in retained_filenames
+    assert "trip-tracker-auto-backup-20260619-220000Z.json.gz" in retained_filenames
     for hour in (4, 10, 16, 22):
-        assert f"mileage-logger-auto-backup-20260620-{hour:02d}0000Z.json.gz" in retained_filenames
+        assert f"trip-tracker-auto-backup-20260620-{hour:02d}0000Z.json.gz" in retained_filenames
 
 
 def test_diagnostics_full_restore_requires_confirmation(monkeypatch) -> None:
@@ -3569,8 +3569,8 @@ def test_diagnostics_full_restore_requires_confirmation(monkeypatch) -> None:
         web_login_username="admin",
         web_login_password="secret-password",
     )
-    monkeypatch.setattr("mileage_logger.web.auth.get_settings", lambda: settings)
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.auth.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     try:
         client.post(
@@ -3590,7 +3590,7 @@ def test_diagnostics_full_restore_requires_confirmation(monkeypatch) -> None:
             data={"confirmation": "restore"},
             files={
                 "backup_file": (
-                    "mileage-logger-full-backup.json.gz",
+                    "trip-tracker-full-backup.json.gz",
                     backup_response.content,
                     "application/gzip",
                 )
@@ -3840,7 +3840,7 @@ def test_diagnostics_recent_owntracks_entries_show_delay_and_event_labels() -> N
 
 def test_diagnostics_shows_travel_state_change_outside_waypoints(monkeypatch) -> None:
     monkeypatch.setattr(
-        "mileage_logger.services.diagnostics.get_settings",
+        "trip_tracker.services.diagnostics.get_settings",
         lambda: Settings(
             database_url="sqlite://",
             owntracks_travel_distance_m=Decimal("50.0"),
@@ -4037,7 +4037,7 @@ def test_trips_page_removes_deleted_trip_record() -> None:
 
 
 def test_trips_page_creates_manual_trip(monkeypatch) -> None:
-    monkeypatch.setattr("mileage_logger.web.routes.local_today", lambda: date(2026, 6, 22))
+    monkeypatch.setattr("trip_tracker.web.routes.local_today", lambda: date(2026, 6, 22))
     client, session_factory = _test_client_session()
     try:
         with session_factory() as db:
@@ -4194,7 +4194,7 @@ def test_trips_page_shades_automatic_edited_and_manual_trip_rows() -> None:
         assert response.text.count("<strong>Automatic</strong>") == 1
         assert response.text.count("<strong>Edited</strong>") == 1
         assert response.text.count("<strong>Manual</strong>") == 1
-        styles = Path("mileage_logger/web/static/styles.css").read_text()
+        styles = Path("trip_tracker/web/static/styles.css").read_text()
         assert (
             ".trip-row-auto,\n.deleted-trip-row-auto {\n  background:\n    "
             "linear-gradient(90deg, "
@@ -4908,7 +4908,7 @@ def test_diagnostics_emergency_rebuild_backs_up_then_repairs_away_from_home(
         database_url="sqlite://",
         automatic_backup_dir=str(tmp_path / "backups"),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.web.routes.get_settings", lambda: settings)
     client, session_factory = _test_client_session()
     first_start = datetime(2026, 7, 18, 13, 0, tzinfo=UTC)
     second_start = datetime(2026, 7, 19, 13, 0, tzinfo=UTC)
@@ -5062,7 +5062,7 @@ def test_diagnostics_shows_app_degraded_banner(monkeypatch) -> None:
         checked_at=datetime(2026, 7, 4, 12, 0, tzinfo=UTC),
     )
     monkeypatch.setattr(
-        "mileage_logger.web.routes.build_app_health_snapshot",
+        "trip_tracker.web.routes.build_app_health_snapshot",
         lambda **_kwargs: degraded_snapshot,
     )
     client, _session_factory = _test_client_session()
@@ -5222,7 +5222,7 @@ def test_diagnostics_manual_odometer_card_shows_current_odometer() -> None:
             "restore_result": None,
             "backup_restore_enabled": False,
             "automatic_backups_enabled": False,
-            "automatic_backup_dir": "/tmp/mileage-logger-backups",
+            "automatic_backup_dir": "/tmp/trip-tracker-backups",
             "automatic_backups": [],
             "backup_upload_max_mb": 10,
         }
@@ -5328,7 +5328,7 @@ def test_diagnostics_manual_odometer_card_shows_current_odometer() -> None:
 
 
 def test_diagnostics_compact_table_and_log_styles() -> None:
-    stylesheet = Path("mileage_logger/web/static/styles.css").read_text(encoding="utf-8")
+    stylesheet = Path("trip_tracker/web/static/styles.css").read_text(encoding="utf-8")
 
     assert ".automatic-backup-table .backup-file-name" in stylesheet
     assert ".dashboard-loading-shell" in stylesheet
@@ -5506,14 +5506,14 @@ def test_diagnostics_eia_api_test_button_reports_pass(monkeypatch) -> None:
             )
 
     monkeypatch.setattr(
-        "mileage_logger.web.routes.get_settings",
+        "trip_tracker.web.routes.get_settings",
         lambda: Settings(
             database_url="sqlite://",
             eia_api_key="configured",
             eia_series_id="PET.EMM_EPMR_PTE_SMI_DPG.W",
         ),
     )
-    monkeypatch.setattr("mileage_logger.web.routes.EiaSeriesProvider", FakeEiaProvider)
+    monkeypatch.setattr("trip_tracker.web.routes.EiaSeriesProvider", FakeEiaProvider)
     client, _ = _test_client_session()
     try:
         response = client.post("/diagnostics/test/eia")
@@ -5535,10 +5535,10 @@ def test_aaa_gas_provider_uses_local_observed_date(monkeypatch) -> None:
 
     now = datetime(2026, 6, 11, 21, 30, tzinfo=UTC)
     monkeypatch.setattr(
-        "mileage_logger.services.gas_prices.httpx.get",
+        "trip_tracker.services.gas_prices.httpx.get",
         lambda *_, **__: FakeResponse(),
     )
-    monkeypatch.setattr("mileage_logger.services.gas_prices.local_today", lambda: now.date())
+    monkeypatch.setattr("trip_tracker.services.gas_prices.local_today", lambda: now.date())
 
     reading = AaaMichiganGasPriceProvider().current_regular_price("MI")
 

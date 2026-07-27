@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from mileage_logger.services import gas_prices
+from trip_tracker.services import gas_prices
 
 
 def test_run_gas_snapshot_once_uses_isolated_database_session(monkeypatch) -> None:

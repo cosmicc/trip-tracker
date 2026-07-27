@@ -4,7 +4,7 @@
 
 ## Overview
 
-The trip processor (`mileage_logger/services/trip_processor.py`) is the core engine that:
+The trip processor (`trip_tracker/services/trip_processor.py`) is the core engine that:
 1. Monitors incoming OwnTracks location and transition events
 2. Detects qualifying waypoint transition pairs (leave + enter)
 3. Generates `Trip` records with calculated mileage
@@ -51,7 +51,7 @@ points through the arrival without starting unrelated next-day trips during the 
 
 ### Key Entry Point
 
-[`generate_trips(db, day, checkpoint)`](mileage_logger/services/mileage.py) in `mileage.py`:
+[`generate_trips(db, day, checkpoint)`](trip_tracker/services/mileage.py) in `mileage.py`:
 - Called once per local calendar day by the trip processor
 - Returns list of newly created `Trip` records
 - Uses a `TripProcessingCheckpoint` to avoid re-processing old data
@@ -180,9 +180,9 @@ Enable debug logging to see trip calculation details:
 LOG_LEVEL=debug
 ```
 
-Logs go to the `mileage_logger.trip_calculation` logger through the root console handler. Use
-`docker compose logs -f mlapp`
-or `docker service logs -f <stack>_mlapp`; do not add a trip-calculation file handler.
+Logs go to the `trip_tracker.trip_calculation` logger through the root console handler. Use
+`docker compose logs -f ttapp`
+or `docker service logs -f <stack>_ttapp`; do not add a trip-calculation file handler.
 
 ---
 
@@ -221,7 +221,7 @@ or `docker service logs -f <stack>_mlapp`; do not add a trip-calculation file ha
 
 If you need to generate trips from sources other than OwnTracks:
 
-1. **For manual trips**: Use [`create_manual_trip()`](mileage_logger/services/mileage.py#L400) in mileage.py
+1. **For manual trips**: Use [`create_manual_trip()`](trip_tracker/services/mileage.py#L400) in mileage.py
    ```python
    trip = create_manual_trip(
        db,
@@ -234,16 +234,16 @@ If you need to generate trips from sources other than OwnTracks:
    )
    ```
 
-2. **To skip a trip**: Use [`delete_trip()`](mileage_logger/services/mileage.py#L450) to create a deletion tombstone
+2. **To skip a trip**: Use [`delete_trip()`](trip_tracker/services/mileage.py#L450) to create a deletion tombstone
    - Prevents auto-regeneration from same OwnTracks events
 
-3. **To edit a trip**: Use [`update_trip_details()`](mileage_logger/services/mileage.py#L480)
+3. **To edit a trip**: Use [`update_trip_details()`](trip_tracker/services/mileage.py#L480)
    - Updates trip date, names, or miles
    - Re-sequences month's odometer chain when miles change
 
 ### Modifying Waypoint Matching
 
-Edit `site_for_location()` in [mileage.py](mileage_logger/services/mileage.py#L250) to customize how OwnTracks events match to saved waypoints:
+Edit `site_for_location()` in [mileage.py](trip_tracker/services/mileage.py#L250) to customize how OwnTracks events match to saved waypoints:
 - Currently matches by: region ID → name → distance (within radius)
 - Can add custom rules (e.g., time-of-day, frequency bias)
 
@@ -298,4 +298,4 @@ Key test patterns:
 - **Checkpoint**: One row in database, updated once per processor run
 - **Lock**: Single thread processing to prevent concurrent modification conflicts
 
-See [trip_processor.py](mileage_logger/services/trip_processor.py#L1) `_PROCESSING_LOCK` for concurrency guard.
+See [trip_processor.py](trip_tracker/services/trip_processor.py#L1) `_PROCESSING_LOCK` for concurrency guard.

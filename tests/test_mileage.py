@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from mileage_logger.models import (
+from trip_tracker.models import (
     AUTOMATIC_TRIP_PROCESSING_CHECKPOINT,
     Base,
     DeletedTrip,
@@ -17,7 +17,7 @@ from mileage_logger.models import (
     Trip,
     TripProcessingCheckpoint,
 )
-from mileage_logger.services.mileage import (
+from trip_tracker.services.mileage import (
     AUTO_TRIP_SOURCE,
     MANUAL_TRIP_SOURCE,
     MILEAGE_SOURCE_ESTIMATED_ODOMETER,
@@ -37,15 +37,15 @@ from mileage_logger.services.mileage import (
     resequence_month_trip_odometers_from,
     update_trip_details,
 )
-from mileage_logger.services.owntracks_rollups import (
+from trip_tracker.services.owntracks_rollups import (
     owntracks_monthly_event_count,
     owntracks_monthly_total_miles,
 )
-from mileage_logger.services.retention import (
+from trip_tracker.services.retention import (
     purge_processed_owntracks_locations,
     reset_previous_month_data,
 )
-from mileage_logger.services.trip_processor import run_automatic_trip_processing
+from trip_tracker.services.trip_processor import run_automatic_trip_processing
 
 
 def _session() -> Session:

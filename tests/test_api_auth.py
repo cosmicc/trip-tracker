@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.testclient import TestClient
 
-from mileage_logger.api.routes import get_owntracks_session_factory
-from mileage_logger.app import app
-from mileage_logger.config import Settings
-from mileage_logger.database import get_db
-from mileage_logger.models import Base, OwnTracksLocation
+from trip_tracker.api.routes import get_owntracks_session_factory
+from trip_tracker.app import app
+from trip_tracker.config import Settings
+from trip_tracker.database import get_db
+from trip_tracker.models import Base, OwnTracksLocation
 
 
 def _test_client_session() -> tuple[TestClient, sessionmaker[Session]]:
@@ -42,17 +42,17 @@ def _test_client_session() -> tuple[TestClient, sessionmaker[Session]]:
 
 def _patch_settings(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     for module_name in (
-        "mileage_logger.api.deps",
-        "mileage_logger.api.routes",
-        "mileage_logger.app",
-        "mileage_logger.services.mileage",
-        "mileage_logger.services.owntracks",
-        "mileage_logger.services.trip_processor",
-        "mileage_logger.web.auth",
+        "trip_tracker.api.deps",
+        "trip_tracker.api.routes",
+        "trip_tracker.app",
+        "trip_tracker.services.mileage",
+        "trip_tracker.services.owntracks",
+        "trip_tracker.services.trip_processor",
+        "trip_tracker.web.auth",
     ):
         monkeypatch.setattr(f"{module_name}.get_settings", lambda: settings, raising=False)
     monkeypatch.setattr(
-        "mileage_logger.api.routes.run_migrations_once_on_reconnect",
+        "trip_tracker.api.routes.run_migrations_once_on_reconnect",
         lambda: None,
     )
 
@@ -173,7 +173,7 @@ def test_owntracks_endpoint_uses_dedicated_database_session(monkeypatch) -> None
 
         assert response.status_code == 200
         assert response.headers["Cache-Control"] == "no-store"
-        assert "X-Mileage-Logger-OwnTracks-Buffered" not in response.headers
+        assert "X-Trip-Tracker-OwnTracks-Buffered" not in response.headers
         with session_factory() as db:
             assert db.scalar(select(func.count(OwnTracksLocation.id))) == 1
     finally:
@@ -235,7 +235,7 @@ def test_owntracks_endpoint_waits_for_migrations_before_accepting(monkeypatch) -
         raise RuntimeError("migration failed")
 
     monkeypatch.setattr(
-        "mileage_logger.api.routes.run_migrations_once_on_reconnect",
+        "trip_tracker.api.routes.run_migrations_once_on_reconnect",
         migrations_not_ready,
     )
     client, session_factory = _test_client_session()

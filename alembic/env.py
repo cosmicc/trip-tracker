@@ -3,9 +3,9 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from mileage_logger.config import get_settings
-from mileage_logger.database_engine import normalized_database_url
-from mileage_logger.models import Base
+from trip_tracker.config import get_settings
+from trip_tracker.database_engine import normalized_database_url
+from trip_tracker.models import Base
 
 config = context.config
 

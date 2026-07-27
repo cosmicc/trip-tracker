@@ -2,11 +2,54 @@
 
 import asyncio
 import errno
+import gzip
+import json
+from datetime import UTC, datetime
 
 import pytest
 
-from mileage_logger.config import Settings
-from mileage_logger.services import backups
+from trip_tracker.config import Settings
+from trip_tracker.services import backups
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected_reason"),
+    (
+        ("mileage-logger-auto-backup-20260726-120000Z.json.gz", "scheduled"),
+        ("mileage-logger-auto-backup-startup-20260726-120000Z.json.gz", "startup"),
+        (
+            "mileage-logger-auto-backup-emergency-20260726-120000Z.json.gz",
+            "emergency",
+        ),
+        ("trip-tracker-auto-backup-20260726-120000Z.json.gz", "scheduled"),
+    ),
+)
+def test_pre_1_5_and_current_automatic_backup_filenames_remain_available(
+    filename: str,
+    expected_reason: str,
+) -> None:
+    """Renaming the app must not hide retained automatic backup files."""
+
+    parsed = backups._parse_automatic_backup_filename(filename)
+
+    assert parsed == (datetime(2026, 7, 26, 12, tzinfo=UTC), expected_reason)
+
+
+def test_pre_1_5_full_backup_format_remains_restore_compatible() -> None:
+    """The renamed app accepts the trusted legacy format marker during validation."""
+
+    content = gzip.compress(
+        json.dumps(
+            {
+                "format": "mileage_logger.full_backup",
+                "version": backups.BACKUP_VERSION,
+            }
+        ).encode("utf-8")
+    )
+
+    payload = backups._load_backup_payload(content)
+
+    assert payload["format"] == "mileage_logger.full_backup"
 
 
 def test_automatic_backup_scheduler_retries_stale_storage_until_success(

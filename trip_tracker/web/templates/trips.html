@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block content %}
+<section
+  class="dashboard-loading-shell trips-loading-shell"
+  data-trips-content-url="{{ trips_content_url }}"
+  aria-busy="true"
+>
+  <div class="loading-overlay-card" role="status" aria-live="polite">
+    <span class="loading-spinner" aria-hidden="true"></span>
+    <div>
+      <h1>Work Trips</h1>
+      <p>Loading selected-month cards and work trip records.</p>
+    </div>
+  </div>
+</section>
+<noscript>
+  <section class="panel">
+    <h2>JavaScript Required</h2>
+    <p>The Work Trips page loads selected-month totals and work trip rows after the initial page opens.</p>
+  </section>
+</noscript>
+<script>
+  (() => {
+    const bindTripMonthSelector = () => {
+      const monthInput = document.querySelector("[data-trip-month-form] input[type='month']");
+      if (!monthInput || monthInput.dataset.tripsBound === "true") {
+        return;
+      }
+      monthInput.dataset.tripsBound = "true";
+      monthInput.addEventListener("change", () => {
+        if (!monthInput.value || !monthInput.checkValidity()) {
+          return;
+        }
+        const [year, month] = monthInput.value.split("-");
+        window.location.assign(`/trips?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`);
+      });
+    };
+
+    const shell = document.querySelector(".trips-loading-shell");
+    if (!shell) {
+      return;
+    }
+    const contentUrl = shell.dataset.tripsContentUrl;
+    const renderError = () => {
+      shell.setAttribute("aria-busy", "false");
+      shell.innerHTML = `
+        <section class="panel">
+          <h2>Work Trips Could Not Load</h2>
+          <p class="panel-meta">Refresh the page to try loading the Work Trips page again.</p>
+        </section>
+      `;
+    };
+    fetch(contentUrl, {
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "fetch" },
+      cache: "no-store",
+    })
+      .then((response) => {
+        if (response.headers.get("X-Trip-Tracker-Limp-Mode") === "true") {
+          window.location.replace("/");
+          return "";
+        }
+        if (!response.ok) {
+          throw new Error(`Work Trips content request failed: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then((html) => {
+        if (!html) {
+          return;
+        }
+        shell.setAttribute("aria-busy", "false");
+        shell.outerHTML = html;
+        bindTripMonthSelector();
+      })
+      .catch(renderError);
+  })();
+</script>
+{% endblock %}

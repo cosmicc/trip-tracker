@@ -4,8 +4,8 @@ import sys
 import pytest
 from pydantic import ValidationError
 
-from mileage_logger.config import Settings
-from mileage_logger.logging_config import (
+from trip_tracker.config import Settings
+from trip_tracker.logging_config import (
     LocalTimezoneFormatter,
     configure_logging,
     log_level_value,
@@ -84,7 +84,7 @@ def test_formatter_adds_level_to_exception_traceback_lines() -> None:
         raise RuntimeError("sample failure")
     except RuntimeError:
         record = logging.LogRecord(
-            "mileage_logger.test",
+            "trip_tracker.test",
             logging.ERROR,
             __file__,
             1,
@@ -96,7 +96,7 @@ def test_formatter_adds_level_to_exception_traceback_lines() -> None:
     lines = formatter.format(record).splitlines()
 
     assert len(lines) > 1
-    assert all(" ERROR [mileage_logger.test] " in line for line in lines)
+    assert all(" ERROR [trip_tracker.test] " in line for line in lines)
 
 
 def test_formatter_redacts_sensitive_query_values() -> None:
@@ -105,7 +105,7 @@ def test_formatter_redacts_sensitive_query_values() -> None:
         datefmt="%Y-%m-%d %H:%M:%S %Z",
     )
     record = logging.LogRecord(
-        "mileage_logger.test",
+        "trip_tracker.test",
         logging.INFO,
         __file__,
         1,
@@ -126,7 +126,7 @@ def test_formatter_redacts_bearer_tokens() -> None:
         datefmt="%Y-%m-%d %H:%M:%S %Z",
     )
     record = logging.LogRecord(
-        "mileage_logger.test",
+        "trip_tracker.test",
         logging.INFO,
         __file__,
         1,
@@ -143,7 +143,7 @@ def test_formatter_redacts_bearer_tokens() -> None:
 
 def test_configure_logging_uses_console_without_file_handlers(monkeypatch) -> None:
     settings = Settings(log_level="debug")
-    monkeypatch.setattr("mileage_logger.logging_config.get_settings", lambda: settings)
+    monkeypatch.setattr("trip_tracker.logging_config.get_settings", lambda: settings)
 
     configure_logging("test-console")
 
@@ -151,8 +151,8 @@ def test_configure_logging_uses_console_without_file_handlers(monkeypatch) -> No
     handlers = [
         handler
         for handler in root_logger.handlers
-        if getattr(handler, "_mileage_logger_marker", "")
-        == "mileage_logger_test-console_console"
+        if getattr(handler, "_trip_tracker_marker", "")
+        == "trip_tracker_test-console_console"
     ]
     try:
         assert len(handlers) == 1

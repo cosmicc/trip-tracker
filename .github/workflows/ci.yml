@@ -26,8 +26,8 @@ jobs:
           CLOUDFLARED_TUNNEL_TOKEN=dummy-token docker compose --env-file .env.docker.example config
       - name: Check Docker Swarm stack config
         run: |
-          export APP_IMAGE=mileage-logger-app:ci
-          export NGINX_IMAGE=mileage-logger-nginx:ci
+          export APP_IMAGE=trip-tracker-app:ci
+          export NGINX_IMAGE=trip-tracker-nginx:ci
           export SECRET_KEY=dummy-secret-key
           export WEB_LOGIN_USERNAME=admin
           export WEB_LOGIN_PASSWORD=dummy-password
@@ -36,9 +36,9 @@ jobs:
           export OWNTRACKS_PASSWORD=dummy-owntracks-password
           export OWNTRACKS_ENCRYPTION_KEY=dummy-owntracks-encryption-key
           export CLOUDFLARED_TUNNEL_TOKEN=dummy-token
-          export DATABASE_URL=postgresql+psycopg://mileage:secret@db.example:5432/mileage_logger
+          export DATABASE_URL=postgresql+psycopg://triptracker:secret@db.example:5432/trip_tracker
           docker stack config -c docker-stack.yml
-          export DATABASE_URL=postgresql+psycopg://mileage:mileage@postgres:5432/mileage_logger
+          export DATABASE_URL=postgresql+psycopg://triptracker:triptracker@postgres:5432/trip_tracker
           docker stack config -c docker-stack.yml -c docker-stack.local-postgres.yml
       - name: Test
         run: pytest

@@ -1,11 +1,14 @@
-# Installation
+# Trip Tracker Installation
+
+For an existing Mileage Logger deployment, complete
+[the 1.5.0 rename guide](UPGRADE-1.5.md) before using these installation steps.
 
 This app is intended to run as a Docker Compose stack on an Ubuntu server. The stack includes:
 
 - `postgres`: optional, default-on bundled PostgreSQL database through the `local-postgres`
   Compose profile.
-- `app`: FastAPI mileage logger.
-- `nginx`: web service reverse proxy that serves the web app on HTTP port `80`.
+- `ttapp`: FastAPI Trip Tracker app.
+- `ttnginx`: web service reverse proxy that serves the web app on HTTP port `80`.
 - `cloudflared`: Cloudflare Tunnel connector for public HTTPS access.
 - Daily Michigan gas price snapshots run as a background scheduler in the app container.
 - Console-only app logging for Docker or Swarm log collection.
@@ -50,8 +53,8 @@ sudo usermod -aG docker "$USER"
 Clone the repository on the server:
 
 ```bash
-git clone https://github.com/cosmicc/Mileage-Logger.git
-cd Mileage-Logger
+git clone https://github.com/cosmicc/Trip-Tracker.git
+cd Trip-Tracker
 ```
 
 ## Create Configuration
@@ -75,19 +78,19 @@ The generated `.env` keeps `COMPOSE_PROFILES=local-postgres`, which deploys the 
 PostgreSQL container. For a central PostgreSQL server, set `COMPOSE_PROFILES=` and update
 `DATABASE_URL` before deploying.
 
-It also tries to prepare `HOST_DATA_DIR` and the separate `HOST_BACKUP_DIR`. If your
-user cannot write to `/var/lib`, create them before
-starting Docker:
+It also runs `scripts/prepare_host_directories.sh`, which uses `mkdir -p` to create
+`HOST_DATA_DIR` and the separate `HOST_BACKUP_DIR`. Run the same reusable script after changing
+either path. Use `sudo` when your account cannot create the configured directories:
 
 ```bash
-sudo install -d -m 0750 /var/lib/mileage-logger
-sudo install -d -m 0750 /var/lib/mileage-logger/backups
+sudo ./scripts/prepare_host_directories.sh .env
 ```
 
-When upgrading from an earlier release, move retained automatic backups from
-`/var/log/mileage-logger/backups` to `/var/lib/mileage-logger/backups` before the first v1.3.4
-deployment, or set `HOST_DATA_DIR` to the existing host directory. Earlier login audit log files
-are no longer read or written; new login audits begin in PostgreSQL after the migration.
+When upgrading from v1.3.3 or older, retain automatic backups from the former log-backed backup
+directory and move them into the configured `HOST_BACKUP_DIR` before the first start. The
+[1.5.0 rename guide](UPGRADE-1.5.md) covers both the legacy and current host paths. Earlier login
+audit log files are no longer read or written; new login audits begin in PostgreSQL after the
+migration.
 
 Before upgrading from a release that still has the server-side OwnTracks buffer, keep PostgreSQL
 online and confirm both Diagnostics queue counts are zero. Do not deploy v1.4.0 or later
@@ -113,7 +116,7 @@ WEB_LOGIN_PASSWORD=<generated-web-password>
 WEB_SESSION_COOKIE_SECURE=true
 WEB_LOGIN_MAX_ATTEMPTS=5
 WEB_LOGIN_LOCKOUT_SECONDS=300
-PASSKEY_RP_NAME=Mileage Logger
+PASSKEY_RP_NAME=Trip Tracker
 PASSKEY_RP_ID=
 PASSKEY_ORIGIN=
 CLOUDFLARE_IP_BLOCKING_ENABLED=false
@@ -129,6 +132,7 @@ PUSHOVER_USER_KEY=
 PUSHOVER_DEVICE=
 PUSHOVER_PRIORITY=0
 APP_HEALTH_MONITOR_INTERVAL_SECONDS=60
+APP_HEALTH_REMINDER_INTERVAL_SECONDS=3600
 APP_HEALTH_DB_LATENCY_WARNING_MS=500
 APP_HEALTH_DB_LATENCY_CRITICAL_MS=2000
 APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS=15
@@ -143,8 +147,9 @@ AUTOMATIC_TRIP_PROCESSING_INTERVAL_SECONDS=60
 OWNTRACKS_PURGE_ENABLED=true
 OWNTRACKS_LOCATION_RETENTION_DAYS=90
 APP_DATA_DIR=/data
-HOST_DATA_DIR=/var/lib/mileage-logger
-HOST_BACKUP_DIR=/var/lib/mileage-logger/backups
+HOST_DATA_DIR=/var/lib/trip-tracker
+HOST_BACKUP_DIR=/var/lib/trip-tracker/backups
+POSTGRES_DATA_VOLUME=trip-tracker-postgres-data
 AUTOMATIC_BACKUPS_ENABLED=true
 AUTOMATIC_BACKUP_DIR=/data/backups
 AUTOMATIC_BACKUP_RETRY_SECONDS=60
@@ -237,8 +242,8 @@ docker compose ps
 Expected result:
 
 - `postgres` healthy.
-- `mlapp` healthy.
-- `mlnginx` running.
+- `ttapp` healthy.
+- `ttnginx` running.
 - `cloudflared` running.
 
 Open the app:
@@ -263,7 +268,7 @@ In Portainer:
 4. Repository URL:
 
 ```text
-https://github.com/cosmicc/Mileage-Logger.git
+https://github.com/cosmicc/Trip-Tracker.git
 ```
 
 5. Compose path:
@@ -289,7 +294,7 @@ If you change `POSTGRES_PASSWORD`, make sure `DATABASE_URL` uses the same passwo
 
 ```env
 POSTGRES_PASSWORD=your-db-password
-DATABASE_URL=postgresql+psycopg://mileage:your-db-password@postgres:5432/mileage_logger
+DATABASE_URL=postgresql+psycopg://triptracker:your-db-password@postgres:5432/trip_tracker
 ```
 
 To use a central PostgreSQL server on your network, set `COMPOSE_PROFILES=` so Compose skips the
@@ -297,7 +302,7 @@ bundled `postgres` service, then point `DATABASE_URL` at the remote server:
 
 ```env
 COMPOSE_PROFILES=
-DATABASE_URL=postgresql+psycopg://mileage:your-db-password@central-db-host:5432/mileage_logger
+DATABASE_URL=postgresql+psycopg://triptracker:your-db-password@central-db-host:5432/trip_tracker
 ```
 
 The app waits for and runs migrations against the configured `DATABASE_URL`. When
@@ -334,11 +339,11 @@ Swarm does not build images during `docker stack deploy`, does not support Compo
 does not preserve the normal Compose loopback-only nginx port binding. The Swarm stack therefore
 uses image tags and overlay networking. The `Build and publish Swarm images` GitHub workflow
 publishes the app and nginx images to GHCR with the package version, `latest`, and an immutable
-commit-SHA tag. For v1.4.4, use:
+commit-SHA tag. For v1.5.0, use:
 
 ```bash
-APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4
-NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4
+APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0
+NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0
 ```
 
 If the GHCR packages are private, configure GHCR registry credentials in Portainer or authenticate
@@ -351,33 +356,32 @@ needed variables in the shell before deploying.
 Remote PostgreSQL Swarm deployment:
 
 ```bash
-export APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4
-export NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4
-export DATABASE_URL=postgresql+psycopg://mileage:url_encoded_password@central-db-host:5432/mileage_logger
-docker stack deploy -c docker-stack.yml mileage-logger
+export APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0
+export NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0
+export DATABASE_URL=postgresql+psycopg://triptracker:url_encoded_password@central-db-host:5432/trip_tracker
+docker stack deploy -c docker-stack.yml trip-tracker
 ```
 
 Bundled PostgreSQL Swarm deployment:
 
 ```bash
-export APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4
-export NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4
-export DATABASE_URL=postgresql+psycopg://mileage:your-db-password@postgres:5432/mileage_logger
-docker stack deploy -c docker-stack.yml -c docker-stack.local-postgres.yml mileage-logger
+export APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0
+export NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0
+export DATABASE_URL=postgresql+psycopg://triptracker:your-db-password@postgres:5432/trip_tracker
+docker stack deploy -c docker-stack.yml -c docker-stack.local-postgres.yml trip-tracker
 ```
 
 For Swarm, configure the Cloudflare Tunnel public hostname origin service as:
 
 ```text
-http://mlnginx
+http://ttnginx
 ```
 
-This service-name change does not rename any existing Portainer variables. Continue using
-`APP_IMAGE`, `NGINX_IMAGE`, `APP_UID`, `APP_GID`, and `HOST_DATA_DIR`; v1.4.1 also adds
-`HOST_BACKUP_DIR`. Existing deployments must change the
-Cloudflare Tunnel origin from `http://nginx` to `http://mlnginx` when updating the stack. Swarm
-will replace the former `<stack>_app` and `<stack>_nginx` services with `<stack>_mlapp` and
-`<stack>_mlnginx`; a short interruption is expected during that replacement.
+This service-name change does not rename the existing Portainer environment variables. Continue
+using `APP_IMAGE`, `NGINX_IMAGE`, `APP_UID`, `APP_GID`, `HOST_DATA_DIR`, and `HOST_BACKUP_DIR`.
+Existing 1.4.4 deployments must change the Cloudflare Tunnel origin from `http://mlnginx` to
+`http://ttnginx`. Swarm replaces the former `<stack>_mlapp` and `<stack>_mlnginx` services with
+`<stack>_ttapp` and `<stack>_ttnginx`; a short interruption is expected during that replacement.
 The stack runs two `cloudflared` replicas with at most one per node, a five-second restart delay,
 and start-first rolling updates. No additional tunnel token is required; both replicas use the
 existing `CLOUDFLARED_TUNNEL_TOKEN`.
@@ -386,15 +390,20 @@ The Swarm stack intentionally does not publish nginx directly. If you add a publ
 remember Swarm publishes it on the node interface, not as the normal Compose-only
 `127.0.0.1:${HTTP_PORT}` binding.
 
-Keep `HOST_DATA_DIR` and `HOST_BACKUP_DIR` available on every Swarm node that can run the `mlapp`
+Keep `HOST_DATA_DIR` and `HOST_BACKUP_DIR` available on every Swarm node that can run the `ttapp`
 task. The optional
 `postgres_data` named volume is node-local unless your Swarm volume driver provides shared storage.
-The Swarm `mlapp` task runs as `${APP_UID:-1000}:${APP_GID:-100}`. Set `APP_UID` and `APP_GID` in the
-Portainer stack environment when your shared-storage ownership differs, and ensure both host
-directories already exist and are writable by that identity. To remove the old shared-storage
-layout, set `HOST_DATA_DIR` to the `mileage-logger` directory and set `HOST_BACKUP_DIR` to its
-`backups` child. v1.4.1 starts a fresh automatic backup set there; it does not move
-files from `mileage-logger/logs/backups`.
+The Swarm `ttapp` task runs as `${APP_UID:-1000}:${APP_GID:-100}`. Set `APP_UID` and `APP_GID` in the
+Portainer stack environment when your shared-storage ownership differs. On every eligible node,
+create missing paths and parents using the values exported from Portainer or saved in `.env`:
+
+```bash
+sudo ./scripts/prepare_host_directories.sh .env
+```
+
+Ensure both host directories are writable by the configured container identity. Follow
+[UPGRADE-1.5.md](UPGRADE-1.5.md) when moving an existing shared-storage layout; the app does not
+move host files automatically.
 
 The diagnostics page is available at:
 
@@ -554,7 +563,7 @@ WEB_LOGIN_PASSWORD=change-web-login-password
 WEB_SESSION_COOKIE_SECURE=true
 WEB_LOGIN_MAX_ATTEMPTS=5
 WEB_LOGIN_LOCKOUT_SECONDS=300
-PASSKEY_RP_NAME=Mileage Logger
+PASSKEY_RP_NAME=Trip Tracker
 PASSKEY_RP_ID=
 PASSKEY_ORIGIN=
 CLOUDFLARE_IP_BLOCKING_ENABLED=false
@@ -570,6 +579,7 @@ PUSHOVER_USER_KEY=
 PUSHOVER_DEVICE=
 PUSHOVER_PRIORITY=0
 APP_HEALTH_MONITOR_INTERVAL_SECONDS=60
+APP_HEALTH_REMINDER_INTERVAL_SECONDS=3600
 APP_HEALTH_DB_LATENCY_WARNING_MS=500
 APP_HEALTH_DB_LATENCY_CRITICAL_MS=2000
 APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS=15
@@ -578,8 +588,8 @@ APP_HEALTH_DISK_CRITICAL_FREE_MB=250
 APP_HEALTH_STATE_PATH=/data/app-health-state.json
 HTTP_PORT=80
 APP_DATA_DIR=/data
-HOST_DATA_DIR=/var/lib/mileage-logger
-HOST_BACKUP_DIR=/var/lib/mileage-logger/backups
+HOST_DATA_DIR=/var/lib/trip-tracker
+HOST_BACKUP_DIR=/var/lib/trip-tracker/backups
 AUTOMATIC_BACKUPS_ENABLED=true
 AUTOMATIC_BACKUP_DIR=/data/backups
 AUTOMATIC_BACKUP_RETRY_SECONDS=60
@@ -627,7 +637,9 @@ remain above its warning or critical threshold for
 alerts use `APP_HEALTH_DISK_WARNING_FREE_MB` and `APP_HEALTH_DISK_CRITICAL_FREE_MB`, not a disk-used
 percentage. It sends one
 degraded/unavailable notification when the issue
-set changes and one restored notification when all monitored checks are healthy.
+set changes, repeats the current unhealthy state every
+`APP_HEALTH_REMINDER_INTERVAL_SECONDS` (3,600 seconds by default), and sends one restored
+notification when all monitored checks are healthy.
 The Diagnostics page marks travel when recent OwnTracks movement outside saved waypoints covers at
 least `OWNTRACKS_TRAVEL_DISTANCE_M` meters.
 
@@ -719,8 +731,8 @@ PDF reports use a portrait page layout and are generated only when you click `Do
 they are streamed to the browser and are not saved on the server.
 
 Runtime, request, worker, trip-calculation, and debug logs are written only to container
-stdout/stderr. Use `docker compose logs -f mlapp` for Compose or
-`docker service logs -f <stack>_mlapp` for Swarm. No application log file is created.
+stdout/stderr. Use `docker compose logs -f ttapp` for Compose or
+`docker service logs -f <stack>_ttapp` for Swarm. No application log file is created.
 Log timestamps are formatted in `LOCAL_TIMEZONE`, and Docker Compose also sets the container `TZ`
 value from `LOCAL_TIMEZONE`.
 Set `LOG_LEVEL` to `debug`, `info`, or `warning`. Error log lines are always included.
@@ -731,7 +743,7 @@ The app container runs the gas price snapshot scheduler when `GAS_SNAPSHOT_ENABL
 the same command that remains available for manual or host-timer runs:
 
 ```bash
-mileage-logger gas-snapshot
+trip-tracker gas-snapshot
 ```
 
 By default Docker runs one snapshot on app startup and then every 24 hours.
@@ -748,42 +760,42 @@ GAS_SNAPSHOT_RUN_ON_STARTUP=true
 View gas snapshot logs with the normal app logs:
 
 ```bash
-docker compose logs -f mlapp
+docker compose logs -f ttapp
 ```
 
 You can disable the in-app scheduler with `GAS_SNAPSHOT_ENABLED=false` and use a host systemd
 timer instead of cron. For example, a timer can run
-`docker compose exec -T mlapp mileage-logger gas-snapshot` every 24 hours while the app container
+`docker compose exec -T ttapp trip-tracker gas-snapshot` every 24 hours while the app container
 keeps serving requests. Do not try to run systemd inside the app container; the Docker image runs a
 single application process.
 
 Optional host service:
 
 ```ini
-# /etc/systemd/system/mileage-logger-gas-snapshot.service
+# /etc/systemd/system/trip-tracker-gas-snapshot.service
 [Unit]
-Description=Mileage Logger gas price snapshot
+Description=Trip Tracker gas price snapshot
 Requires=docker.service
 After=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/Mileage-Logger
-ExecStart=/usr/bin/docker compose exec -T mlapp mileage-logger gas-snapshot
+WorkingDirectory=/opt/Trip-Tracker
+ExecStart=/usr/bin/docker compose exec -T ttapp trip-tracker gas-snapshot
 ```
 
 Optional host timer:
 
 ```ini
-# /etc/systemd/system/mileage-logger-gas-snapshot.timer
+# /etc/systemd/system/trip-tracker-gas-snapshot.timer
 [Unit]
-Description=Run Mileage Logger gas price snapshot every 24 hours
+Description=Run Trip Tracker gas price snapshot every 24 hours
 
 [Timer]
 OnBootSec=15min
 OnUnitActiveSec=24h
 Persistent=true
-Unit=mileage-logger-gas-snapshot.service
+Unit=trip-tracker-gas-snapshot.service
 
 [Install]
 WantedBy=timers.target
@@ -793,7 +805,7 @@ Use the actual repository path for `WorkingDirectory`, then enable the timer:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now mileage-logger-gas-snapshot.timer
+sudo systemctl enable --now trip-tracker-gas-snapshot.timer
 ```
 
 You can view database-backed web-login audit records from the in-app `Diagnostics` page and use
@@ -816,8 +828,8 @@ If TLS terminates outside this Compose stack, proxy traffic to this stack's `HTT
 View logs:
 
 ```bash
-docker compose logs -f mlapp
-docker compose logs -f mlnginx
+docker compose logs -f ttapp
+docker compose logs -f ttnginx
 docker compose logs -f postgres  # only when COMPOSE_PROFILES=local-postgres
 ```
 
@@ -855,7 +867,7 @@ PostgreSQL deployments should back up and maintain the database on the central d
 
 The Diagnostics page includes authenticated full app data backup and restore controls. Use
 `Download Full Backup` before updates or database work. The downloaded `.json.gz` file contains all
-Mileage Logger app tables plus an OwnTracks waypoint export. To restore it, open Diagnostics,
+Trip Tracker app tables plus an OwnTracks waypoint export. To restore it, open Diagnostics,
 upload the file, and type `RESTORE`; the app validates the backup before replacing current app
 table rows in one transaction. Backup files contain sensitive location history and should be stored
 securely.
@@ -872,7 +884,7 @@ the prior 2 days.
 Back up the bundled PostgreSQL container:
 
 ```bash
-docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > mileage_logger.sql
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > trip_tracker.sql
 ```
 
 This command only applies when `COMPOSE_PROFILES=local-postgres`. For remote PostgreSQL,
@@ -880,10 +892,10 @@ run `pg_dump` or your preferred backup process on the central database server. T
 the preferred quick recovery file for this application. `pg_dump` remains useful for low-level
 PostgreSQL administration or migration outside the app.
 
-Volume names may differ if your Compose project name is not `mileage-logger`. Check with:
+Check the configured volume name before any bundled PostgreSQL migration:
 
 ```bash
-docker volume ls | grep mileage
+docker volume ls
 ```
 
 ## Troubleshooting
@@ -897,7 +909,7 @@ docker compose ps
 Check app startup and migration logs:
 
 ```bash
-docker compose logs mlapp
+docker compose logs ttapp
 ```
 
 Validate the web service proxy:
@@ -912,7 +924,7 @@ If OwnTracks returns unauthorized, confirm `.env` values and restart:
 ```bash
 grep OWNTRACKS .env
 grep WEB_API_KEY .env
-docker compose restart mlapp
+docker compose restart ttapp
 ```
 
 If ports conflict, change `HTTP_PORT` in `.env`:

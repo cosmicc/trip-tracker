@@ -8,10 +8,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from mileage_logger.config import Settings
-from mileage_logger.models import Base, MonthlyGasPrice, MonthlyReportExpense, Site, Trip
-from mileage_logger.services import pdf as pdf_service
-from mileage_logger.services.pdf import (
+from trip_tracker.config import Settings
+from trip_tracker.models import Base, MonthlyGasPrice, MonthlyReportExpense, Site, Trip
+from trip_tracker.services import pdf as pdf_service
+from trip_tracker.services.pdf import (
     PDF_IDENTITY_TO_TABLE_SPACER,
     PDF_REIMBURSEMENT_HIGHLIGHT_COLOR,
     PDF_REPORT_HORIZONTAL_MARGIN,

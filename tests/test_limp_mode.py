@@ -1,4 +1,4 @@
-from mileage_logger.services.trip_processor import AutomaticTripProcessor
+from trip_tracker.services.trip_processor import AutomaticTripProcessor
 
 
 def test_automatic_trip_processor_pauses_when_database_is_unavailable(monkeypatch) -> None:
@@ -10,10 +10,10 @@ def test_automatic_trip_processor_pauses_when_database_is_unavailable(monkeypatc
         raise AssertionError("trip processor should not open a session while DB is unavailable")
 
     monkeypatch.setattr(
-        "mileage_logger.services.trip_processor.database_is_reachable",
+        "trip_tracker.services.trip_processor.database_is_reachable",
         lambda: False,
     )
-    monkeypatch.setattr("mileage_logger.services.trip_processor.SessionLocal", fail_session_open)
+    monkeypatch.setattr("trip_tracker.services.trip_processor.SessionLocal", fail_session_open)
 
     AutomaticTripProcessor()._process_once()
 

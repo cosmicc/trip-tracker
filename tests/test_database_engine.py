@@ -1,19 +1,19 @@
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from mileage_logger.config import Settings
-from mileage_logger.database import (
+from trip_tracker.config import Settings
+from trip_tracker.database import (
     DatabaseConfigurationError,
     UnavailableDatabaseEngine,
     create_configured_engine,
     is_database_unavailable_error,
 )
-from mileage_logger.database_engine import database_engine_options, normalized_database_url
+from trip_tracker.database_engine import database_engine_options, normalized_database_url
 
 
 def test_postgresql_engine_options_are_configurable_for_network_database() -> None:
     settings = Settings(
-        database_url="postgresql+psycopg://mileage:secret@db-server:5432/mileage_logger",
+        database_url="postgresql+psycopg://triptracker:secret@db-server:5432/trip_tracker",
         database_pool_size=3,
         database_max_overflow=4,
         database_pool_timeout_seconds=12,
@@ -34,7 +34,7 @@ def test_postgresql_engine_options_are_configurable_for_network_database() -> No
 
 def test_bare_postgresql_url_uses_installed_psycopg_driver() -> None:
     settings = Settings(
-        database_url="postgresql://mileage:secret@db-server:5432/mileage_logger",
+        database_url="postgresql://mileage:secret@db-server:5432/trip_tracker",
     )
 
     engine = create_configured_engine(settings)

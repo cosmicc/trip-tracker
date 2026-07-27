@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "mileage_logger/**"
+      - "trip_tracker/**"
       - "alembic/**"
       - "alembic.ini"
       - "scripts/**"
@@ -22,7 +22,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: mileage-logger-images-main
+  group: trip-tracker-images-main
   cancel-in-progress: true
 
 jobs:
@@ -34,13 +34,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - component: mlapp
+          - component: ttapp
             dockerfile: ./Dockerfile
-            image: ghcr.io/cosmicc/mileage-logger-app
+            image: ghcr.io/cosmicc/trip-tracker-app
 
-          - component: mlnginx
+          - component: ttnginx
             dockerfile: ./deploy/nginx/Dockerfile
-            image: ghcr.io/cosmicc/mileage-logger-nginx
+            image: ghcr.io/cosmicc/trip-tracker-nginx
 
     steps:
       - name: Check out repository

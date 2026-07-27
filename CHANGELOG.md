@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.5.0 - Unreleased
+
+### Added
+- Added a focused 1.5.0 upgrade guide covering the coordinated database, PostgreSQL role, Docker
+  volume, bind-mount, service, network, image, Cloudflare origin, package, and repository renames.
+- Added backward compatibility for restoring pre-1.5 full backups and listing retained pre-1.5
+  automatic backup files after the rename.
+- Added an explicit `POSTGRES_DATA_VOLUME` deployment setting so a Compose or Portainer project
+  rename does not silently select an empty bundled PostgreSQL volume.
+- Added a reusable host-directory preparation script that creates missing `HOST_DATA_DIR` and
+  `HOST_BACKUP_DIR` paths and their parents before Compose or Swarm deployment.
+
+### Changed
+- Renamed the application from Mileage Logger to Trip Tracker across the Python package, CLI,
+  headers, web app metadata, installed-app manifest, logo assets, tests, documentation, Docker and
+  Swarm services, network, persistent paths, database defaults, GitHub references, and GHCR images.
+- Changed the Python package to `trip_tracker`, CLI command to `trip-tracker`, Docker services to
+  `ttapp` and `ttnginx`, PostgreSQL database to `trip_tracker`, PostgreSQL role to `triptracker`,
+  and browser session cookie to `trip_tracker_session`.
+- Reused the approved road, speedometer, and location-pin logo and existing Option A color palette
+  under Trip Tracker asset names.
+- Bumped the Trip Tracker package version to 1.5.0 for unreleased development.
+- Changed Pushover app-health monitoring to repeat unresolved degraded or unavailable alerts every
+  configurable hour while retaining immediate state-change and restoration notifications.
+
+### Fixed
+- Fixed current deployment examples and app metadata that would otherwise keep publishing or
+  displaying pre-rename identifiers after the 1.5.0 transition.
+- Fixed deployments relying on missing host bind-mount directories by using a shared `mkdir -p`
+  preparation workflow for both persistent app data and automatic backups.
+
 ## 1.4.4 - 07.26.2026
 
 ### Added

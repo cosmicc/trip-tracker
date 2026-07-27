@@ -1,8 +1,11 @@
-# Mileage Logger
+# Trip Tracker
 
-Mileage Logger receives OwnTracks waypoint events from an Android phone over HTTP,
+Trip Tracker receives OwnTracks waypoint events from an Android phone over HTTP,
 stores them in PostgreSQL, lets you review and edit generated waypoint work trips, and produces
 monthly mileage and expense PDF logs.
+
+Upgrading an existing deployment from 1.4.4 or earlier requires coordinated database, storage,
+service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.0.
 
 ## Current Scope
 
@@ -41,7 +44,7 @@ reimbursement gallons * Michigan monthly average gas price = total reimbursement
 The first provider can fetch the current AAA Michigan regular gasoline average and store daily
 snapshots. Monthly reports use a saved manual monthly average when present, or the average of
 stored daily snapshots for that month. Historical Michigan monthly pricing sources can be added
-behind `mileage_logger.services.gas_prices.GasPriceProvider` without changing report generation.
+behind `trip_tracker.services.gas_prices.GasPriceProvider` without changing report generation.
 Set `VEHICLE_MPG` to the fuel economy that should be used for reimbursement calculations.
 
 EIA support is scaffolded because the official API requires an API key and the exact series should
@@ -49,7 +52,7 @@ be configured with `EIA_SERIES_ID` once the preferred Michigan data series is se
 
 ## Docker Deployment
 
-Mileage Logger is intended to run as a Docker Compose stack. It runs the complete stack:
+Trip Tracker is intended to run as a Docker Compose stack. It runs the complete stack:
 
 - Optional bundled PostgreSQL database, or a remote PostgreSQL database through `DATABASE_URL`.
 - FastAPI mileage app.
@@ -66,7 +69,7 @@ Mileage Logger is intended to run as a Docker Compose stack. It runs the complet
   banner appears when monitored app-health checks need attention, detailed lists use compact 10-row
   pages, and Full Data Backup stays at the bottom.
 - Dashboard Work Trips counts for today, the current Monday-Sunday week, and the current month.
-- Authenticated desktop navigation shows the current app version under the Mileage Logger title and
+- Authenticated desktop navigation shows the current app version under the Trip Tracker title and
   uses centered blue raised icon-and-label buttons matching the mobile web-app layout, where
   navigation becomes icon-only in one full-width top-bar row and leaves the bottom safe area clear
   for phone system navigation without opting into edge-to-edge phone drawing. App buttons use a
@@ -88,23 +91,24 @@ start the stack:
 docker compose up -d --build
 ```
 
-`scripts/init_docker_env.sh` tries to create the host app-data directory.
-If your user cannot write to `/var/lib`, create them before starting Docker:
+`scripts/init_docker_env.sh` uses the reusable host preparation script to create both bind-mount
+directories with `mkdir -p`. Run it directly after changing either host path, or use `sudo` when
+your account cannot create the configured directories:
 
 ```bash
-sudo install -d -m 0750 /var/lib/mileage-logger
+sudo ./scripts/prepare_host_directories.sh .env
 ```
 
 ```bash
-sudo rmdir /var/log/mileage-logger-login-failures.log
+sudo rmdir /var/log/trip-tracker-login-failures.log
 ```
 
 Useful commands:
 
 ```bash
 docker compose ps
-docker compose logs -f mlapp
-docker compose logs -f mlnginx
+docker compose logs -f ttapp
+docker compose logs -f ttnginx
 docker compose down
 ```
 
@@ -137,17 +141,17 @@ Docker Swarm deployments use [docker-stack.yml](docker-stack.yml) instead of `do
 Swarm cannot build images, use Compose profiles, or keep the normal Compose loopback-only port
 binding. The `Build and publish Swarm images` GitHub workflow publishes versioned, `latest`, and
 commit-SHA app and nginx images to GHCR. Set `APP_IMAGE` to
-`ghcr.io/cosmicc/mileage-logger-app:1.4.4` and `NGINX_IMAGE` to
-`ghcr.io/cosmicc/mileage-logger-nginx:1.4.4` through Portainer or the shell, and deploy the base
+`ghcr.io/cosmicc/trip-tracker-app:1.5.0` and `NGINX_IMAGE` to
+`ghcr.io/cosmicc/trip-tracker-nginx:1.5.0` through Portainer or the shell, and deploy the base
 stack for remote PostgreSQL. Add
 [docker-stack.local-postgres.yml](docker-stack.local-postgres.yml) only when the bundled
 PostgreSQL service should be part of the Swarm stack. In Swarm, configure the Cloudflare Tunnel
-origin service as `http://mlnginx` so cloudflared reaches the uniquely named `mlnginx` service over
-the stack's `mileage-internal` overlay network. The Swarm `mlapp` task defaults to `APP_UID=1000`
+origin service as `http://ttnginx` so cloudflared reaches the uniquely named `ttnginx` service over
+the stack's `trip-tracker-internal` overlay network. The Swarm `ttapp` task defaults to `APP_UID=1000`
 and `APP_GID=100`; make the shared `HOST_DATA_DIR` and `HOST_BACKUP_DIR` writable by that identity
 on every eligible node.
-Existing Portainer deployments must update the Cloudflare Tunnel origin from `http://nginx` to
-`http://mlnginx` when applying the service rename. Continue using `APP_IMAGE`, `NGINX_IMAGE`,
+Existing 1.4.4 Portainer deployments must update the Cloudflare Tunnel origin from `http://mlnginx`
+to `http://ttnginx` when applying the service rename. Continue using `APP_IMAGE`, `NGINX_IMAGE`,
 `APP_UID`, `APP_GID`, and `HOST_DATA_DIR`; v1.4.1 adds `HOST_BACKUP_DIR` for the dedicated backup
 mount.
 Swarm runs two `cloudflared` replicas and limits them to one replica per node, providing redundant
@@ -206,7 +210,7 @@ WEB_LOGIN_PASSWORD=change-web-login-password
 WEB_SESSION_COOKIE_SECURE=true
 WEB_LOGIN_MAX_ATTEMPTS=5
 WEB_LOGIN_LOCKOUT_SECONDS=300
-PASSKEY_RP_NAME=Mileage Logger
+PASSKEY_RP_NAME=Trip Tracker
 PASSKEY_RP_ID=
 PASSKEY_ORIGIN=
 ```
@@ -273,13 +277,13 @@ export the saved list as OwnTracks waypoint JSON for backup/import.
 Diagnostics includes a full app data backup and restore panel at the bottom of the page when
 `WEB_LOGIN_USERNAME` and `WEB_LOGIN_PASSWORD` are configured. The manual
 `Download Full Backup` action sits with the lower upload-restore controls and creates a `.json.gz`
-file containing all Mileage Logger database tables plus an OwnTracks waypoint export. Treat this
+file containing all Trip Tracker database tables plus an OwnTracks waypoint export. Treat this
 file as sensitive location history.
 
 The app also creates automatic full-data backups every 6 hours when
 `AUTOMATIC_BACKUPS_ENABLED=true`, which is the default. Automatic backups are stored in
 `AUTOMATIC_BACKUP_DIR`, defaulting to `/data/backups` in Docker. That container path uses the
-dedicated `HOST_BACKUP_DIR` bind mount, such as `mileage-logger/backups` on shared Swarm storage.
+dedicated `HOST_BACKUP_DIR` bind mount, such as `trip-tracker/backups` on shared Swarm storage.
 If shared storage is unavailable, including a stale file handle failure, backup creation pauses
 and retries every `AUTOMATIC_BACKUP_RETRY_SECONDS` until one succeeds; the normal six-hour schedule
 then resumes.
@@ -480,7 +484,8 @@ COMPOSE_PROFILES=local-postgres
 OWNTRACKS_SYNC_WAYPOINTS=true
 OWNTRACKS_DEFAULT_SITE_RADIUS_M=150
 LOCAL_TIMEZONE=America/Detroit
-DATABASE_URL=postgresql+psycopg://mileage:change-postgres-password@postgres:5432/mileage_logger
+DATABASE_URL=postgresql+psycopg://triptracker:change-postgres-password@postgres:5432/trip_tracker
+POSTGRES_DATA_VOLUME=trip-tracker-postgres-data
 DATABASE_POOL_SIZE=5
 DATABASE_MAX_OVERFLOW=10
 DATABASE_POOL_TIMEOUT_SECONDS=30
@@ -500,7 +505,7 @@ WEB_LOGIN_PASSWORD=change-web-login-password
 WEB_SESSION_COOKIE_SECURE=true
 WEB_LOGIN_MAX_ATTEMPTS=5
 WEB_LOGIN_LOCKOUT_SECONDS=300
-PASSKEY_RP_NAME=Mileage Logger
+PASSKEY_RP_NAME=Trip Tracker
 PASSKEY_RP_ID=
 PASSKEY_ORIGIN=
 CLOUDFLARE_IP_BLOCKING_ENABLED=false
@@ -516,6 +521,7 @@ PUSHOVER_USER_KEY=
 PUSHOVER_DEVICE=
 PUSHOVER_PRIORITY=0
 APP_HEALTH_MONITOR_INTERVAL_SECONDS=60
+APP_HEALTH_REMINDER_INTERVAL_SECONDS=3600
 APP_HEALTH_DB_LATENCY_WARNING_MS=500
 APP_HEALTH_DB_LATENCY_CRITICAL_MS=2000
 APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS=15
@@ -524,8 +530,8 @@ APP_HEALTH_DISK_CRITICAL_FREE_MB=250
 APP_HEALTH_STATE_PATH=/data/app-health-state.json
 HTTP_PORT=80
 APP_DATA_DIR=/data
-HOST_DATA_DIR=/var/lib/mileage-logger
-HOST_BACKUP_DIR=/var/lib/mileage-logger/backups
+HOST_DATA_DIR=/var/lib/trip-tracker
+HOST_BACKUP_DIR=/var/lib/trip-tracker/backups
 AUTOMATIC_BACKUPS_ENABLED=true
 AUTOMATIC_BACKUP_DIR=/data/backups
 AUTOMATIC_BACKUP_RETRY_SECONDS=60
@@ -565,12 +571,12 @@ latency, free disk space, active web-login lockouts, and app-managed Cloudflare 
 database latency must remain above a configured threshold for
 `APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS` before Pushover sends it. Disk alerts use the adjustable
 free-space amounts rather than a used percentage. The monitor sends a degraded or unavailable
-notification when
-the monitored issue set changes, and one restored notification when all monitored checks are
-healthy again.
+notification when the monitored issue set changes, repeats an unchanged unhealthy state every
+`APP_HEALTH_REMINDER_INTERVAL_SECONDS` (one hour by default), and sends one restored notification
+when all monitored checks are healthy again.
 The app writes all runtime, request, worker, trip-calculation, and debug logging to container
-stdout/stderr. Use `docker compose logs -f mlapp` for Compose or
-`docker service logs -f <stack>_mlapp` for Swarm. Successful and failed login audits are stored in
+stdout/stderr. Use `docker compose logs -f ttapp` for Compose or
+`docker service logs -f <stack>_ttapp` for Swarm. Successful and failed login audits are stored in
 PostgreSQL and shown separately in Diagnostics; no audit or application log file is created.
 Automatic backups default to `/data/backups`, backed by the dedicated `HOST_BACKUP_DIR` bind
 mount, and are listed/restorable from Diagnostics after web login. Long automatic-backup filenames
@@ -586,7 +592,7 @@ In Docker, the app container runs the gas price snapshot scheduler instead of a 
 `gas-snapshot` sidecar container. It uses the same code as the manual command:
 
 ```bash
-mileage-logger gas-snapshot
+trip-tracker gas-snapshot
 ```
 
 By default Docker runs one snapshot on app startup and then every 24 hours. Configure it with:
@@ -598,7 +604,7 @@ GAS_SNAPSHOT_RUN_ON_STARTUP=true
 ```
 
 Set `GAS_SNAPSHOT_ENABLED=false` to disable the in-app scheduler. The manual command remains
-available, so a host systemd timer can run `docker compose exec -T mlapp mileage-logger gas-snapshot`
+available, so a host systemd timer can run `docker compose exec -T ttapp trip-tracker gas-snapshot`
 on a schedule without cron if you prefer host-managed timing. The Docker image itself does not run
 systemd inside the container.
 Set `REPORT_DISPLAY_NAME` when downloaded PDF reports should identify who submitted the report; the
@@ -630,6 +636,6 @@ ruff check .
 pytest
 bash -n scripts/*.sh
 CLOUDFLARED_TUNNEL_TOKEN=dummy-token docker compose --env-file .env.docker.example config
-docker compose run --rm mlapp alembic revision --autogenerate -m "message"
-docker compose run --rm mlapp alembic upgrade head
+docker compose run --rm ttapp alembic revision --autogenerate -m "message"
+docker compose run --rm ttapp alembic upgrade head
 ```

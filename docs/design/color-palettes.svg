@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1080" viewBox="0 0 1400 1080" role="img" aria-labelledby="title desc">
-  <title id="title">Mileage Logger color palette samples</title>
-  <desc id="desc">Theme palette choices for Mileage Logger, including the current app palette, candidate alternatives, and approved Work Trips row-state colors.</desc>
+  <title id="title">Trip Tracker color palette samples</title>
+  <desc id="desc">Theme palette choices for Trip Tracker, including the current app palette, candidate alternatives, and approved Work Trips row-state colors.</desc>
   <defs>
     <style>
       .page { fill: #f6f5f1; }
@@ -17,7 +17,7 @@
     </style>
   </defs>
   <rect class="page" x="0" y="0" width="1400" height="1080"/>
-  <text class="title" x="54" y="60">Mileage Logger Color Palette Samples</text>
+  <text class="title" x="54" y="60">Trip Tracker Color Palette Samples</text>
   <text class="subtitle" x="54" y="94">Option A remains active. Work Trips row-state colors are approved separately below.</text>
 
   <g transform="translate(54 130)">
@@ -148,7 +148,7 @@
 
   <g transform="translate(54 895)">
     <text class="card-title" x="0" y="0">Notes for implementation</text>
-    <text class="subtitle" x="0" y="34">Current palette variables live in mileage_logger/web/static/styles.css. Matching surfaces also exist in deploy/nginx/error-pages, the web manifest, and the app icon.</text>
+    <text class="subtitle" x="0" y="34">Current palette variables live in trip_tracker/web/static/styles.css. Matching surfaces also exist in deploy/nginx/error-pages, the web manifest, and the app icon.</text>
     <text class="subtitle" x="0" y="64">Pick one option before any app-wide theme change. Keep contrast high for repeated operational use and preserve semantic warning, danger, and success states.</text>
   </g>
 </svg>

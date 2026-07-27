@@ -14,7 +14,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
-COPY mileage_logger ./mileage_logger
+COPY trip_tracker ./trip_tracker
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
@@ -28,4 +28,4 @@ RUN pip install . \
 EXPOSE 8000
 
 ENTRYPOINT ["docker-entrypoint"]
-CMD ["uvicorn", "mileage_logger.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "trip_tracker.app:app", "--host", "0.0.0.0", "--port", "8000"]

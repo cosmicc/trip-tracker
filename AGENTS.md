@@ -1,10 +1,10 @@
-# AI Agent Instructions for Mileage Logger
+# AI Agent Instructions for Trip Tracker
 
-This document helps AI coding agents understand the Mileage Logger codebase and be immediately productive.
+This document helps AI coding agents understand the Trip Tracker codebase and be immediately productive.
 
 ## Project Overview
 
-**Mileage Logger** is a FastAPI web application that:
+**Trip Tracker** is a FastAPI web application that:
 - Receives location events from the [OwnTracks](https://owntracks.org/) mobile app
 - Stores waypoint transitions in PostgreSQL
 - Automatically generates **trips** from waypoint leave/enter events
@@ -34,6 +34,12 @@ docker compose up -d --build
 
 The application is Docker-only. Do not add or document a non-Docker app runtime path.
 
+Version 1.5.0 is the product-wide rename from Mileage Logger to Trip Tracker. Use
+[UPGRADE-1.5.md](UPGRADE-1.5.md) for the approved identifier mapping and deployment migration
+sequence. New code, assets, configuration, and documentation use only Trip Tracker identifiers;
+pre-1.5 names are allowed only in changelog history, the migration guide, and explicit
+backward-compatibility handling.
+
 ---
 
 ## Architecture
@@ -42,15 +48,15 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 
 | Directory | Purpose |
 |-----------|---------|
-| `mileage_logger/api/` | API routes for OwnTracks ingestion, trip updates, PDF export |
-| `mileage_logger/web/` | Web UI routes, Jinja2 templates, HTML rendering |
-| `mileage_logger/services/` | Business logic: trip generation, mileage calculation, gas prices |
-| `mileage_logger/models.py` | SQLAlchemy ORM models (Trip, Site, OwnTracksLocation, etc.) |
+| `trip_tracker/api/` | API routes for OwnTracks ingestion, trip updates, PDF export |
+| `trip_tracker/web/` | Web UI routes, Jinja2 templates, HTML rendering |
+| `trip_tracker/services/` | Business logic: trip generation, mileage calculation, gas prices |
+| `trip_tracker/models.py` | SQLAlchemy ORM models (Trip, Site, OwnTracksLocation, etc.) |
 | `alembic/versions/` | Database schema migrations |
 
 ### Core Services
 
-**[trip_processor.py](mileage_logger/services/trip_processor.py)** — Automatic trip generation
+**[trip_processor.py](trip_tracker/services/trip_processor.py)** — Automatic trip generation
 - Watches for new OwnTracks location/transition events
 - Runs `generate_trips()` when waypoint transitions occur
 - Maintains rolling `TripProcessingCheckpoint` to track odometer distance
@@ -58,7 +64,7 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Purges only old raw OwnTracks location/event records based on `OWNTRACKS_LOCATION_RETENTION_DAYS`,
   with an enforced minimum retention of 90 days
 
-**[mileage.py](mileage_logger/services/mileage.py)** — Trip mileage calculation
+**[mileage.py](trip_tracker/services/mileage.py)** — Trip mileage calculation
 - `generate_trips()` - Core trip generation from waypoint transitions
 - `haversine_miles()` - Calculates distance between GPS coordinates
 - `site_for_location()` - Matches OwnTracks event to saved waypoint site
@@ -66,16 +72,16 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
   distance source
 - Supports manual trip entry and deletion with suppression records
 
-**[gas_prices.py](mileage_logger/services/gas_prices.py)** — Reimbursement calculation
+**[gas_prices.py](trip_tracker/services/gas_prices.py)** — Reimbursement calculation
 - `GasPriceProvider` abstract class with two implementations:
   - `AaaMichiganGasPriceProvider` - Scrapes AAA website (default)
   - `EiaSeriesProvider` - Uses EIA API (requires configuration)
 - Formula: `(trip_miles / VEHICLE_MPG) * gas_price = reimbursement`
 - Docker runs recurring gas snapshots from the app container lifespan when
-  `GAS_SNAPSHOT_ENABLED=true`; the `mileage-logger gas-snapshot` CLI remains available for manual
+  `GAS_SNAPSHOT_ENABLED=true`; the `trip-tracker gas-snapshot` CLI remains available for manual
   or host systemd timer runs.
 
-**[owntracks.py](mileage_logger/services/owntracks.py)** — Payload parsing
+**[owntracks.py](trip_tracker/services/owntracks.py)** — Payload parsing
 - Handles HTTP OwnTracks messages
 - Parses `location` and `transition` event types
 - Validates required fields: `lat`, `lon`, `tst`
@@ -92,7 +98,7 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Returns `200 []` only after PostgreSQL accepts the payload. Exact HTTP retries reuse the existing
   raw event instead of inserting it twice.
 
-**[login_failures.py](mileage_logger/services/login_failures.py)** — Web login audit logging
+**[login_failures.py](trip_tracker/services/login_failures.py)** — Web login audit logging
 - Stores structured PostgreSQL records for successful and failed web UI login attempts and emits
   the same safe audit events through console logging
 - Saves client IP details, submitted username, authentication method for successful logins,
@@ -113,7 +119,7 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Diagnostics shows the stored effective IP for successful-login and failed-login rows. Failed-login
   row block buttons must use that same visible, blockable client IP.
 
-**[passkeys.py](mileage_logger/services/passkeys.py)** — WebAuthn passkey login
+**[passkeys.py](trip_tracker/services/passkeys.py)** — WebAuthn passkey login
 - Generates and verifies WebAuthn registration and authentication ceremonies with `py_webauthn`
 - Stores passkeys in `passkey_credentials` for the single configured `WEB_LOGIN_USERNAME`
 - Keeps registration behind an authenticated Diagnostics session; unauthenticated routes are
@@ -121,7 +127,7 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Failed passkey assertions use the same audit log, temporary lockout, and Cloudflare auto-block
   path as failed password logins
 
-**[cloudflare_blocks.py](mileage_logger/services/cloudflare_blocks.py)** — Cloudflare IP blocking
+**[cloudflare_blocks.py](trip_tracker/services/cloudflare_blocks.py)** — Cloudflare IP blocking
 - Creates and deletes app-managed Cloudflare zone IP Access Rules for failed-login and manually
   entered IP addresses
 - Uses `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID`, and the app-managed block table to avoid
@@ -131,18 +137,19 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Enforces `CLOUDFLARE_IP_BLOCK_ALLOWLIST` so trusted IPs/CIDRs are not blocked by the app, and
   records the block reason and manual/automatic source shown on Diagnostics
 
-**[app_health.py](mileage_logger/services/app_health.py)** — App health and Pushover alerts
+**[app_health.py](trip_tracker/services/app_health.py)** — App health and Pushover alerts
 - Builds the shared app-health snapshot used by Diagnostics and background notifications
 - Monitors PostgreSQL availability and latency, free disk space for runtime paths, active web-login
   lockouts, and app-managed Cloudflare IP blocks
 - Requires high database latency to remain elevated for
   `APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS` before Pushover alerts while Diagnostics remains live
-- Sends Pushover notifications only when configured degraded/unavailable issue signatures change,
-  and sends a restored notification when all monitored checks return to healthy
+- Sends immediate Pushover notifications when configured degraded/unavailable issue signatures
+  change, repeats unchanged unhealthy states every `APP_HEALTH_REMINDER_INTERVAL_SECONDS`
+  (default one hour), and sends a restored notification when all monitored checks return to healthy
 - Persists notification state under `APP_HEALTH_STATE_PATH` so app restarts do not repeat the same
   degraded alert
 
-**[pdf.py](mileage_logger/services/pdf.py)** — Report generation
+**[pdf.py](trip_tracker/services/pdf.py)** — Report generation
 - Generates portrait PDF with trip table and condensed margins for report content
 - Formats the PDF title with the selected report month name and year, such as `Mileage & Expense
   Report - June 2026`
@@ -162,7 +169,7 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Calculates total miles, mileage reimbursement, extra expense total, and total reimbursement
   amount
 
-**[backups.py](mileage_logger/services/backups.py)** — Full app data backup and restore
+**[backups.py](trip_tracker/services/backups.py)** — Full app data backup and restore
 - Creates a gzip-compressed JSON backup of every SQLAlchemy app table plus OwnTracks waypoint export
 - Restores validated backup files transactionally by replacing current app table rows
 - Creates a startup automatic backup followed by 6-hour automatic full-data backups when
@@ -173,6 +180,9 @@ The application is Docker-only. Do not add or document a non-Docker app runtime 
 - Backs Diagnostics full backup/restore controls, retained automatic-backup downloads, and retained
   automatic-backup restore; backup download and restore require web login, restore also requires
   typed confirmation, and startup-created backup rows are labeled as Startup
+- Accepts the pre-1.5 `mileage_logger.full_backup` format marker and recognizes pre-1.5 automatic
+  backup filenames so a product rename never strands existing safety backups. New files must use
+  Trip Tracker identifiers.
 
 ---
 
@@ -259,29 +269,31 @@ dates. Manual trips are not restricted by those indexes.
   `CLOUDFLARE_AUTO_BLOCK_FAILED_LOGIN_ATTEMPTS`, `PUSHOVER_ENABLED`, `PUSHOVER_TOKEN`,
   `PUSHOVER_USER`, `PUSHOVER_APP_KEY`, `PUSHOVER_USER_KEY`, `PUSHOVER_DEVICE`,
   `PUSHOVER_PRIORITY`, `APP_HEALTH_MONITOR_INTERVAL_SECONDS`,
+  `APP_HEALTH_REMINDER_INTERVAL_SECONDS`,
   `APP_HEALTH_DB_LATENCY_WARNING_MS`, `APP_HEALTH_DB_LATENCY_CRITICAL_MS`,
   `APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS`, `APP_HEALTH_DISK_WARNING_FREE_MB`,
   `APP_HEALTH_DISK_CRITICAL_FREE_MB`,
-  `APP_HEALTH_STATE_PATH`, `WEB_API_KEY`, `OWNTRACKS_ENCRYPTION_KEY`, `PASSKEY_RP_NAME`,
+  `APP_HEALTH_STATE_PATH`, `POSTGRES_DATA_VOLUME`, `WEB_API_KEY`,
+  `OWNTRACKS_ENCRYPTION_KEY`, `PASSKEY_RP_NAME`,
   `PASSKEY_RP_ID`, `PASSKEY_ORIGIN`
 - See [README.md](README.md#Useful-Docker-environment-options) for all options
 
 ### Visual Design and Color Palette
 - The active app palette is defined with CSS variables in
-  [styles.css](mileage_logger/web/static/styles.css).
+  [styles.css](trip_tracker/web/static/styles.css).
 - Saved palette samples live in [docs/design/color-palettes.svg](docs/design/color-palettes.svg).
   Option A is the current app palette; the other options are proposals only. The approved Work
   Trips row-state colors are blue (`#4BA3FF`) for automatic trips, purple (`#A855F7`) for edited
   trips, and gold (`#E2AD45`) for manual trips.
-- The source app logo is saved as [docs/design/mileage-logger-logo-original.png](docs/design/mileage-logger-logo-original.png),
-  with a matching SVG wrapper at [docs/design/mileage-logger-logo.svg](docs/design/mileage-logger-logo.svg).
+- The source app logo is saved as [docs/design/trip-tracker-logo-original.png](docs/design/trip-tracker-logo-original.png),
+  with a matching SVG wrapper at [docs/design/trip-tracker-logo.svg](docs/design/trip-tracker-logo.svg).
   Additional source variants are saved as
-  [docs/design/mileage-logger-logo-transparent.png](docs/design/mileage-logger-logo-transparent.png)
-  and [docs/design/mileage-logger-logo-fully-transparent.png](docs/design/mileage-logger-logo-fully-transparent.png).
+  [docs/design/trip-tracker-logo-transparent.png](docs/design/trip-tracker-logo-transparent.png)
+  and [docs/design/trip-tracker-logo-fully-transparent.png](docs/design/trip-tracker-logo-fully-transparent.png).
   Web favicon icons are generated from the original square logo. Apple touch icons and installable
   web-app icons use the cleaned transparent brand asset centered on the dark app background with
   launcher-safe padding so mobile masks do not crop the logo. The authenticated header brand uses
-  the cleaned transparent brand asset under [mileage_logger/web/static/icons](mileage_logger/web/static/icons).
+  the cleaned transparent brand asset under [trip_tracker/web/static/icons](trip_tracker/web/static/icons).
   When icon assets change, update the static icon cache-busting query in `layout.html` and
   `manifest.webmanifest`. Keep app logos, app names, manifest links, favicon links, and Apple touch
   icon links out of the login page.
@@ -302,17 +314,17 @@ dates. Manual trips are not restricted by those indexes.
 
 ### Adding a New Database Field
 1. Create migration in `alembic/versions/` with timestamp:
-   `docker compose run --rm mlapp alembic revision -m "description"`
-2. Update SQLAlchemy model in [models.py](mileage_logger/models.py)
+   `docker compose run --rm ttapp alembic revision -m "description"`
+2. Update SQLAlchemy model in [models.py](trip_tracker/models.py)
 3. Validate through the Docker app image, for example
-   `docker compose run --rm mlapp alembic upgrade head`
+   `docker compose run --rm ttapp alembic upgrade head`
 4. Migration auto-runs on Docker container startup
 
 ### Adding an API Endpoint
-1. Add route to [api/routes.py](mileage_logger/api/routes.py)
+1. Add route to [api/routes.py](trip_tracker/api/routes.py)
 2. Use `Depends(get_db)` for database session
 3. Leave the default API bearer-token middleware in place for non-OwnTracks API routes, and update
-   the explicit exemption list in [api/deps.py](mileage_logger/api/deps.py) only for intentional
+   the explicit exemption list in [api/deps.py](trip_tracker/api/deps.py) only for intentional
    health-check or OwnTracks-ingestion endpoints.
 4. Return JSON or raise `HTTPException`
 
@@ -333,7 +345,7 @@ dates. Manual trips are not restricted by those indexes.
 
 ### Adding a Web Page
 1. Create Jinja2 template in `web/templates/`
-2. Add route to [web/routes.py](mileage_logger/web/routes.py)
+2. Add route to [web/routes.py](trip_tracker/web/routes.py)
 3. Use `authenticate_web_credentials` if page should require login
 4. Pass context dict to `templates.TemplateResponse()`
 
@@ -403,7 +415,7 @@ dates. Manual trips are not restricted by those indexes.
   export action in a footer below the saved-waypoint list.
 - The shared top bar uses a transparent brand logo plus centered blue raised navigation buttons with icons and labels on
   authenticated desktop pages. Show the current app version as a small readable line directly under
-  the Mileage Logger brand title. On mobile, hide the brand/icon and keep the blue navigation
+  the Trip Tracker brand title. On mobile, hide the brand/icon and keep the blue navigation
   buttons as icon-only controls in one full-width top-bar row. App buttons and button-style links
   are raised, brighten on hover, and press inward when clicked while preserving non-navigation
   button colors. Avoid fixed bottom navigation, and use a normal non-edge-to-edge viewport plus
@@ -425,8 +437,8 @@ dates. Manual trips are not restricted by those indexes.
 
 ### Debugging Trip Generation
 1. Check `/diagnostics` page for OwnTracks state and recent events.
-2. View Compose logs with `docker compose logs -f mlapp`; use
-   `docker service logs -f <stack>_mlapp` for Swarm.
+2. View Compose logs with `docker compose logs -f ttapp`; use
+   `docker service logs -f <stack>_ttapp` for Swarm.
 3. All runtime, request, worker, trip-calculation, and debug logs go to stdout/stderr only. Do not
    add file handlers or in-app application-log viewers/downloads.
 4. Successful and failed web login attempts are stored in `web_login_audits` and shown on
@@ -483,7 +495,7 @@ dates. Manual trips are not restricted by those indexes.
 9. Diagnostics shows the app version in the Application card, shows hard drive space for key
    runtime paths, combines paths into one row when exact used bytes and total bytes match, and
    includes current database size plus total app record count at the bottom of the card.
-10. Trip calculation details logged to `mileage_logger.trip_calculation` logger
+10. Trip calculation details logged to `trip_tracker.trip_calculation` logger
 
 ---
 
@@ -508,16 +520,16 @@ See [INSTALL.md](INSTALL.md) for complete Docker and Portainer setup guide.
 
 **Key Points**:
 - Requires Docker Engine and Docker Compose v2
-- Uses `docker-compose.yml` with `mlapp`, `mlnginx`, cloudflared, and an optional default-on `postgres`
+- Uses `docker-compose.yml` with `ttapp`, `ttnginx`, cloudflared, and an optional default-on `postgres`
   service behind the `local-postgres` Compose profile.
 - Docker Swarm deployments use `docker-stack.yml`; add `docker-stack.local-postgres.yml` only when
   bundled PostgreSQL should run in Swarm. Swarm stack files must avoid Compose-only `build`,
   `profiles`, conditional `depends_on`, and loopback-only port binding assumptions. Use prebuilt
-  `APP_IMAGE` and `NGINX_IMAGE` tags, and configure Cloudflare Tunnel to target `http://mlnginx`
+  `APP_IMAGE` and `NGINX_IMAGE` tags, and configure Cloudflare Tunnel to target `http://ttnginx`
   over the stack overlay network.
-- Keep the Compose and Swarm service keys uniquely named `mlapp` and `mlnginx`. The nginx upstream
-  must resolve `mlapp:8000`, and all Swarm services, including optional bundled PostgreSQL, must
-  share the `mileage-internal` overlay network. Do not rename the existing deployment variables
+- Keep the Compose and Swarm service keys uniquely named `ttapp` and `ttnginx`. The nginx upstream
+  must resolve `ttapp:8000`, and all Swarm services, including optional bundled PostgreSQL, must
+  share the `trip-tracker-internal` overlay network. Do not rename the existing deployment variables
   `APP_IMAGE`, `NGINX_IMAGE`, `APP_UID`, `APP_GID`, `HOST_DATA_DIR`, or `HOST_BACKUP_DIR` with
   these service keys.
 - Keep the Swarm `cloudflared` service at two replicas with `max_replicas_per_node: 1`, a
@@ -526,9 +538,11 @@ See [INSTALL.md](INSTALL.md) for complete Docker and Portainer setup guide.
 - `.github/workflows/publish-swarm-images.yml` publishes app and nginx images to GHCR on relevant
   `main` changes. Keep the package-version tag, `latest`, and immutable full-commit-SHA tag aligned,
   and keep `.env.docker.example`, README, and INSTALL examples on the current released version.
-- The Swarm `mlapp` task runs with configurable `APP_UID`/`APP_GID` defaults of `1000:100`. Its
+- The Swarm `ttapp` task runs with configurable `APP_UID`/`APP_GID` defaults of `1000:100`. Its
   shared `HOST_DATA_DIR` and `HOST_BACKUP_DIR` must already be writable by that identity because a
   non-root Swarm task does not run the entrypoint's root-only path ownership preparation.
+  Run `scripts/prepare_host_directories.sh` on every eligible host to create either missing bind
+  path and its parents with `mkdir -p`, then verify ownership for that configured identity.
 - The bundled `postgres` service remains the default database target when
   `COMPOSE_PROFILES=local-postgres`, but app startup and migrations wait on the configured
   `DATABASE_URL` instead of depending on the bundled local database container's health. For a
@@ -543,11 +557,11 @@ See [INSTALL.md](INSTALL.md) for complete Docker and Portainer setup guide.
 - Docker publishes the web service on `127.0.0.1:${HTTP_PORT:-80}`. The bundled `cloudflared` service uses
   host networking so Cloudflare Tunnel can target the loopback listener, such as
   `http://127.0.0.1:2082` when `HTTP_PORT=2082`.
-- When `COMPOSE_PROFILES=local-postgres`, PostgreSQL data is stored in the named `postgres_data`
-  Docker volume and persists across normal `docker compose up -d --build` rebuilds. Do not use
-  `docker compose down -v`, prune volumes, or change the Compose/Portainer stack name unless you
-  have a verified backup and migration plan. Remote PostgreSQL deployments must be backed up and
-  maintained on the central database server.
+- When `COMPOSE_PROFILES=local-postgres`, PostgreSQL data is stored in the volume selected by
+  `POSTGRES_DATA_VOLUME`, defaulting to `trip-tracker-postgres-data`. Keep the explicit name stable
+  across Compose/Portainer project-name changes. Do not use `docker compose down -v`, prune
+  volumes, or change the volume name unless you have a verified backup and migration plan. Remote
+  PostgreSQL deployments must be backed up and maintained on the central database server.
 - Environment variables in `.env` control all configuration. Production Docker must have
   `SECRET_KEY`, `WEB_LOGIN_USERNAME`, and `WEB_LOGIN_PASSWORD` set; the app fails closed when
   production login credentials are missing or the session secret is still `change-me`. When web
@@ -588,6 +602,8 @@ See [INSTALL.md](INSTALL.md) for complete Docker and Portainer setup guide.
   latency reading. Disk health uses adjustable free-space warning and critical thresholds instead
   of used percentages. The app sends degraded/unavailable notifications on monitored state
   changes and one restored notification when all monitored checks are healthy again.
+  Unchanged degraded or unavailable states repeat after
+  `APP_HEALTH_REMINDER_INTERVAL_SECONDS`, which defaults to one hour.
 
 ---
 

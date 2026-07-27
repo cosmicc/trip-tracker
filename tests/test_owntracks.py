@@ -5,8 +5,8 @@ from decimal import Decimal
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from mileage_logger.models import Base, OwnTracksLocation, Site, Trip
-from mileage_logger.services.owntracks import parse_owntracks_location, process_owntracks_payload
+from trip_tracker.models import Base, OwnTracksLocation, Site, Trip
+from trip_tracker.services.owntracks import parse_owntracks_location, process_owntracks_payload
 
 
 def _session() -> Session:
