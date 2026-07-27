@@ -209,8 +209,8 @@ def test_swarm_stack_has_optional_local_postgres_overlay() -> None:
     assert "\n  postgres:" in local_postgres_text
     assert "postgres_data:/var/lib/postgresql/data" in local_postgres_text
     assert "mileage-internal" in local_postgres_text
-    assert "APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.3" in env_text
-    assert "NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.3" in env_text
+    assert "APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4" in env_text
+    assert "NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4" in env_text
     assert "APP_UID=1000" in env_text
     assert "APP_GID=100" in env_text
 

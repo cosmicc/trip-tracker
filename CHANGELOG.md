@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.4.4 - Unreleased
+## 1.4.4 - 07.26.2026
 
 ### Added
 - Added a red Diagnostics Emergency Rebuild action that creates a full safety backup, treats the
@@ -19,7 +19,7 @@
   start month, leaving earlier trips and every other month unchanged.
 - Changed cross-midnight trip processing to assign the trip to its local start day and include
   OwnTracks path events through the actual arrival event after midnight.
-- Bumped the unreleased Mileage Logger package version to 1.4.4.
+- Bumped the Mileage Logger package version to 1.4.4.
 
 ### Fixed
 - Fixed late-month trip-distance corrections being able to replay corrupted gaps across the whole

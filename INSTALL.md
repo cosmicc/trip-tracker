@@ -334,11 +334,11 @@ Swarm does not build images during `docker stack deploy`, does not support Compo
 does not preserve the normal Compose loopback-only nginx port binding. The Swarm stack therefore
 uses image tags and overlay networking. The `Build and publish Swarm images` GitHub workflow
 publishes the app and nginx images to GHCR with the package version, `latest`, and an immutable
-commit-SHA tag. For v1.4.3, use:
+commit-SHA tag. For v1.4.4, use:
 
 ```bash
-APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.3
-NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.3
+APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4
+NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4
 ```
 
 If the GHCR packages are private, configure GHCR registry credentials in Portainer or authenticate
@@ -351,8 +351,8 @@ needed variables in the shell before deploying.
 Remote PostgreSQL Swarm deployment:
 
 ```bash
-export APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.3
-export NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.3
+export APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4
+export NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4
 export DATABASE_URL=postgresql+psycopg://mileage:url_encoded_password@central-db-host:5432/mileage_logger
 docker stack deploy -c docker-stack.yml mileage-logger
 ```
@@ -360,8 +360,8 @@ docker stack deploy -c docker-stack.yml mileage-logger
 Bundled PostgreSQL Swarm deployment:
 
 ```bash
-export APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.3
-export NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.3
+export APP_IMAGE=ghcr.io/cosmicc/mileage-logger-app:1.4.4
+export NGINX_IMAGE=ghcr.io/cosmicc/mileage-logger-nginx:1.4.4
 export DATABASE_URL=postgresql+psycopg://mileage:your-db-password@postgres:5432/mileage_logger
 docker stack deploy -c docker-stack.yml -c docker-stack.local-postgres.yml mileage-logger
 ```

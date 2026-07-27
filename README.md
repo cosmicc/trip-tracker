@@ -137,8 +137,8 @@ Docker Swarm deployments use [docker-stack.yml](docker-stack.yml) instead of `do
 Swarm cannot build images, use Compose profiles, or keep the normal Compose loopback-only port
 binding. The `Build and publish Swarm images` GitHub workflow publishes versioned, `latest`, and
 commit-SHA app and nginx images to GHCR. Set `APP_IMAGE` to
-`ghcr.io/cosmicc/mileage-logger-app:1.4.3` and `NGINX_IMAGE` to
-`ghcr.io/cosmicc/mileage-logger-nginx:1.4.3` through Portainer or the shell, and deploy the base
+`ghcr.io/cosmicc/mileage-logger-app:1.4.4` and `NGINX_IMAGE` to
+`ghcr.io/cosmicc/mileage-logger-nginx:1.4.4` through Portainer or the shell, and deploy the base
 stack for remote PostgreSQL. Add
 [docker-stack.local-postgres.yml](docker-stack.local-postgres.yml) only when the bundled
 PostgreSQL service should be part of the Swarm stack. In Swarm, configure the Cloudflare Tunnel
