@@ -14,26 +14,6 @@ if [[ ! -f "${template}" ]]; then
   exit 1
 fi
 
-get_env_value() {
-  local key="$1"
-  python3 - "${target}" "${key}" <<'PY'
-from pathlib import Path
-import sys
-
-target = Path(sys.argv[1])
-key = sys.argv[2]
-
-for line in target.read_text().splitlines():
-    stripped = line.strip()
-    if not stripped or stripped.startswith("#") or "=" not in stripped:
-        continue
-    name, value = stripped.split("=", 1)
-    if name == key:
-        print(value.strip().strip('"').strip("'"))
-        break
-PY
-}
-
 python3 - "${template}" "${target}" <<'PY'
 from pathlib import Path
 import secrets
@@ -60,27 +40,9 @@ PY
 
 chmod 0600 "${target}"
 
-host_data_dir="$(get_env_value HOST_DATA_DIR)"
-host_backup_dir="$(get_env_value HOST_BACKUP_DIR)"
-
-if [[ -n "${host_data_dir}" ]]; then
-  if mkdir -p "${host_data_dir}" 2>/dev/null; then
-    echo "Prepared host app data directory: ${host_data_dir}"
-  else
-    echo "Could not create host app data directory: ${host_data_dir}" >&2
-    echo "Create it before starting Docker, for example:" >&2
-    echo "  sudo install -d -m 0750 ${host_data_dir}" >&2
-  fi
-fi
-
-if [[ -n "${host_backup_dir}" ]]; then
-  if mkdir -p "${host_backup_dir}" 2>/dev/null; then
-    echo "Prepared host automatic backup directory: ${host_backup_dir}"
-  else
-    echo "Could not create host automatic backup directory: ${host_backup_dir}" >&2
-    echo "Create it before starting Docker, for example:" >&2
-    echo "  sudo install -d -m 0750 ${host_backup_dir}" >&2
-  fi
+if ! ./scripts/prepare_host_directories.sh "${target}"; then
+  echo "The .env file was created, but its host mount directories still need preparation." >&2
+  printf 'Run: sudo ./scripts/prepare_host_directories.sh %q\n' "${target}" >&2
 fi
 
 echo "Created ${target}. Review it, then run: docker compose up -d --build"

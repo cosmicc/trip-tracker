@@ -1,14 +1,14 @@
 # Optional Docker Swarm overlay for deploying the bundled PostgreSQL service.
-# Use with: docker stack deploy -c docker-stack.yml -c docker-stack.local-postgres.yml mileage-logger
+# Use with: docker stack deploy -c docker-stack.yml -c docker-stack.local-postgres.yml trip-tracker
 services:
   postgres:
     image: postgres:16
     networks:
-      - mileage-internal
+      - trip-tracker-internal
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-mileage_logger}
-      POSTGRES_USER: ${POSTGRES_USER:-mileage}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mileage}
+      POSTGRES_DB: ${POSTGRES_DB:-trip_tracker}
+      POSTGRES_USER: ${POSTGRES_USER:-triptracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triptracker}
       TZ: "${LOCAL_TIMEZONE:-America/Detroit}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -27,3 +27,4 @@ services:
 
 volumes:
   postgres_data:
+    name: "${POSTGRES_DATA_VOLUME:-trip-tracker-postgres-data}"

@@ -4,11 +4,15 @@
 
 ## Overview
 
-Mileage Logger uses [Alembic](https://alembic.sqlalchemy.org/) for database migrations:
+Trip Tracker uses [Alembic](https://alembic.sqlalchemy.org/) for database migrations:
 - Migrations live in [`alembic/versions/`](alembic/versions/)
-- SQLAlchemy models in [mileage_logger/models.py](mileage_logger/models.py)
+- SQLAlchemy models in [trip_tracker/models.py](trip_tracker/models.py)
 - Migrations run automatically on app startup via Docker
 - Manual migration commands should run through Docker Compose
+
+The 1.5.0 product rename is an operational database-identity change, not an Alembic schema
+migration. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) to rename the database and role and preserve the
+existing Docker volume. Do not encode database or role renames in an Alembic revision.
 
 ---
 
@@ -16,7 +20,7 @@ Mileage Logger uses [Alembic](https://alembic.sqlalchemy.org/) for database migr
 
 ### Step 1: Update the SQLAlchemy Model
 
-Edit [mileage_logger/models.py](mileage_logger/models.py):
+Edit [trip_tracker/models.py](trip_tracker/models.py):
 
 ```python
 class Trip(Base):
@@ -42,7 +46,7 @@ class Trip(Base):
 
 In the project root:
 ```bash
-docker compose run --rm mlapp alembic revision -m "add custom_field to trips"
+docker compose run --rm ttapp alembic revision -m "add custom_field to trips"
 ```
 
 This creates a new file in `alembic/versions/` with timestamp (e.g., `20260615_0015_add_custom_field_to_trips.py`).
@@ -71,21 +75,21 @@ def downgrade() -> None:
 
 ```bash
 # Apply the migration
-docker compose run --rm mlapp alembic upgrade head
+docker compose run --rm ttapp alembic upgrade head
 
 # Verify the field exists when using the bundled local PostgreSQL profile
-docker compose exec postgres psql -U mileage -d mileage_logger -c "\d trips"
+docker compose exec postgres psql -U triptracker -d trip_tracker -c "\d trips"
 ```
 
 ### Step 5: Rollback if Needed
 
 ```bash
 # Revert to previous migration
-docker compose run --rm mlapp alembic downgrade -1
+docker compose run --rm ttapp alembic downgrade -1
 
 # List migration history
-docker compose run --rm mlapp alembic current
-docker compose run --rm mlapp alembic history
+docker compose run --rm ttapp alembic current
+docker compose run --rm ttapp alembic history
 ```
 
 ---
@@ -111,8 +115,8 @@ docker compose run --rm mlapp alembic history
    ```
 
 4. **Test both directions through Docker**
-   - `docker compose run --rm mlapp alembic upgrade head` — Apply forward
-   - `docker compose run --rm mlapp alembic downgrade -1` — Verify rollback works
+   - `docker compose run --rm ttapp alembic upgrade head` — Apply forward
+   - `docker compose run --rm ttapp alembic downgrade -1` — Verify rollback works
 
 5. **Avoid data transformations in migration**
    - Migrations should handle schema only
@@ -221,20 +225,20 @@ def downgrade() -> None:
 Docker Compose PostgreSQL, when `COMPOSE_PROFILES=local-postgres` is enabled:
 ```bash
 # List all tables
-docker compose exec postgres psql -U mileage -d mileage_logger -c "\dt"
+docker compose exec postgres psql -U triptracker -d trip_tracker -c "\dt"
 
 # Describe a specific table
-docker compose exec postgres psql -U mileage -d mileage_logger -c "\d trips"
+docker compose exec postgres psql -U triptracker -d trip_tracker -c "\d trips"
 
 # View indexes
-docker compose exec postgres psql -U mileage -d mileage_logger -c "\di"
+docker compose exec postgres psql -U triptracker -d trip_tracker -c "\di"
 ```
 
 ### From Python (SQLAlchemy)
 
 ```python
-from mileage_logger.database import engine
-from mileage_logger.models import Trip, Base
+from trip_tracker.database import engine
+from trip_tracker.models import Trip, Base
 
 # Inspect table columns
 table = Trip.__table__
@@ -256,7 +260,7 @@ The entrypoint waits for the database configured by `DATABASE_URL`, not just the
 `postgres` container. The bundled PostgreSQL service is still the default deployment target through
 `COMPOSE_PROFILES=local-postgres`, but a deployment can set `COMPOSE_PROFILES=` and point
 `DATABASE_URL` at a central PostgreSQL server so Compose does not deploy the local `postgres`
-service. Runtime and startup checks share `mileage_logger.database_engine.database_engine_options()`
+service. Runtime and startup checks share `trip_tracker.database_engine.database_engine_options()`
 so PostgreSQL connections use `pool_pre_ping`, configurable pool size, overflow, pool timeout,
 pool recycle, connect timeout, and LIFO reuse for safer network database behavior.
 Bare `postgresql://` URLs are normalized to `postgresql+psycopg://` so SQLAlchemy uses the
@@ -268,22 +272,22 @@ setup, remind operators to URL-encode passwords that contain reserved characters
 
 If the database is unavailable at startup, the entrypoint starts database-outage mode instead of
 exiting. OwnTracks HTTP requests receive retryable `503` responses until PostgreSQL returns.
-`mileage_logger.database_migrations.run_migrations_once_on_reconnect()` runs `alembic upgrade head`
+`trip_tracker.database_migrations.run_migrations_once_on_reconnect()` runs `alembic upgrade head`
 before the endpoint accepts the first recovered OwnTracks payload. Do not return `200` before this
 verification and the payload commit succeed.
 
 **To add a new migration for deployment**:
 1. Create the migration through Docker:
-   `docker compose run --rm mlapp alembic revision -m "description"`
-2. Test with `docker compose run --rm mlapp alembic upgrade head` and
-   `docker compose run --rm mlapp alembic downgrade -1`
+   `docker compose run --rm ttapp alembic revision -m "description"`
+2. Test with `docker compose run --rm ttapp alembic upgrade head` and
+   `docker compose run --rm ttapp alembic downgrade -1`
 3. Commit to git
 4. On server: `docker compose up -d --build` applies migration automatically
 
 **To manually run migration on deployed container**:
 ```bash
-docker compose exec mlapp alembic upgrade head
-docker compose exec mlapp alembic downgrade -1  # Rollback
+docker compose exec ttapp alembic upgrade head
+docker compose exec ttapp alembic downgrade -1  # Rollback
 ```
 
 ---
@@ -295,7 +299,7 @@ docker compose exec mlapp alembic downgrade -1  # Rollback
    - Solution: Always use `nullable=True` initially, then remove after backfill
 
 2. **Not testing rollback**
-   - Always run `docker compose run --rm mlapp alembic downgrade -1` to verify it works
+   - Always run `docker compose run --rm ttapp alembic downgrade -1` to verify it works
    - Prevents being stuck in an unrecoverable state
 
 3. **Schema divergence**
@@ -336,4 +340,4 @@ See [tests/](tests/) for examples of database-dependent tests.
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [SQLAlchemy Column Types](https://docs.sqlalchemy.org/en/20/core/types.html)
 - [Existing migrations](alembic/versions/) as reference
-- [models.py](mileage_logger/models.py) for field definitions
+- [models.py](trip_tracker/models.py) for field definitions

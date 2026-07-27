@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from mileage_logger.models import Site
-from mileage_logger.services.waypoints import owntracks_waypoints_export
+from trip_tracker.models import Site
+from trip_tracker.services.waypoints import owntracks_waypoints_export
 
 
 def test_owntracks_waypoints_export_uses_importable_waypoint_shape() -> None:

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  {% set hide_app_chrome = limp_mode_active | default(false) %}
+  {% set public_device_session = request is defined and request_is_public_device(request) %}
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#11100e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Trip Tracker">
+    <meta name="application-name" content="Trip Tracker">
+    {% if not hide_app_chrome %}
+    {% if not public_device_session %}<link rel="manifest" href="/manifest.webmanifest">{% endif %}
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/static/icons/trip-tracker-icon.svg?v=1.5.0-brand1" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    {% endif %}
+    <title>{% if hide_app_chrome %}Service Temporarily Unavailable{% else %}Trip Tracker{% endif %}</title>
+    <style>
+      {% include "styles.css" %}
+    </style>
+  </head>
+  <body>
+    {% if not hide_app_chrome %}
+    <header class="topbar">
+      <div class="brand" aria-label="Trip Tracker">
+        <span class="brand-mark" aria-hidden="true">
+          <img src="/static/icons/trip-tracker-brand.png" alt="" width="34" height="34">
+        </span>
+        <span class="brand-copy">
+          <span class="brand-title">Trip Tracker</span>
+          <span class="brand-version">v{{ app_version }}</span>
+        </span>
+      </div>
+      {% if request is defined and request_is_authenticated(request) %}
+      {% set nav_disabled = limp_mode_active | default(false) %}
+      <div class="topbar-actions">
+        <nav aria-label="Primary navigation">
+          <a class="nav-link nav-link-home" href="/" aria-label="Home" title="Home">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 10.5 12 3l9 7.5"></path>
+              <path d="M5 9.5V21h14V9.5"></path>
+              <path d="M9 21v-6h6v6"></path>
+            </svg>
+            <span class="nav-label">Home</span>
+          </a>
+          {% if nav_disabled %}
+          <span class="nav-link nav-link-trips nav-link-disabled" role="link" aria-disabled="true" aria-label="Work Trips unavailable" title="Work Trips unavailable while database is unreachable">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 17h12l-1.5-5h-9L6 17Z"></path>
+              <path d="M8 12l1.2-3h5.6L16 12"></path>
+              <circle cx="8" cy="18" r="1.6"></circle>
+              <circle cx="16" cy="18" r="1.6"></circle>
+            </svg>
+            <span class="nav-label">Work Trips</span>
+          </span>
+          {% else %}
+          <a class="nav-link nav-link-trips" href="/trips" aria-label="Work Trips" title="Work Trips">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 17h12l-1.5-5h-9L6 17Z"></path>
+              <path d="M8 12l1.2-3h5.6L16 12"></path>
+              <circle cx="8" cy="18" r="1.6"></circle>
+              <circle cx="16" cy="18" r="1.6"></circle>
+            </svg>
+            <span class="nav-label">Work Trips</span>
+          </a>
+          {% endif %}
+          {% if nav_disabled %}
+          <span class="nav-link nav-link-waypoints nav-link-disabled" role="link" aria-disabled="true" aria-label="Waypoints unavailable" title="Waypoints unavailable while database is unreachable">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11Z"></path>
+              <circle cx="12" cy="10" r="2.2"></circle>
+            </svg>
+            <span class="nav-label">Waypoints</span>
+          </span>
+          {% else %}
+          <a class="nav-link nav-link-waypoints" href="/waypoints" aria-label="Waypoints" title="Waypoints">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11Z"></path>
+              <circle cx="12" cy="10" r="2.2"></circle>
+            </svg>
+            <span class="nav-label">Waypoints</span>
+          </a>
+          {% endif %}
+          {% if nav_disabled %}
+          <span class="nav-link nav-link-diagnostics nav-link-disabled" role="link" aria-disabled="true" aria-label="Diagnostics unavailable" title="Diagnostics unavailable while database is unreachable">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+            </svg>
+            <span class="nav-label">Diagnostics</span>
+          </span>
+          {% else %}
+          <a class="nav-link nav-link-diagnostics" href="/diagnostics" aria-label="Diagnostics" title="Diagnostics">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12h4l2-6 4 12 2-6h6"></path>
+            </svg>
+            <span class="nav-label">Diagnostics</span>
+          </a>
+          {% endif %}
+          {% if web_login_enabled() %}
+          {% if nav_disabled %}
+          <span class="nav-logout nav-link-disabled" role="button" aria-disabled="true" aria-label="Logout unavailable" title="Logout unavailable while database is unreachable">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 17l5-5-5-5"></path>
+              <path d="M15 12H3"></path>
+              <path d="M21 19V5a2 2 0 0 0-2-2h-5"></path>
+            </svg>
+            <span class="nav-label">Logout</span>
+          </span>
+          {% else %}
+          <form action="/logout" method="post" class="nav-form">
+            <button type="submit" class="nav-logout" aria-label="Logout" title="Logout">
+              <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 17l5-5-5-5"></path>
+                <path d="M15 12H3"></path>
+                <path d="M21 19V5a2 2 0 0 0-2-2h-5"></path>
+              </svg>
+              <span class="nav-label">Logout</span>
+            </button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </nav>
+      </div>
+      {% endif %}
+    </header>
+    {% endif %}
+    <main class="page">
+      {% block content %}{% endblock %}
+    </main>
+    {% if not hide_app_chrome %}
+    <script>
+      {% if public_device_session %}
+      (() => {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            registrations.forEach((registration) => registration.unregister());
+          }).catch(() => {});
+        }
+        if ("caches" in window) {
+          caches.keys().then((names) => {
+            names.forEach((name) => caches.delete(name));
+          }).catch(() => {});
+        }
+        try {
+          window.localStorage.clear();
+          window.sessionStorage.clear();
+        } catch (error) {
+          // Storage can be unavailable in hardened or private browser modes.
+        }
+      })();
+      {% else %}
+      if ("serviceWorker" in navigator && window.isSecureContext) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch(() => {});
+        });
+      }
+      {% endif %}
+
+      {% if public_device_session %}
+      (() => {
+        const idleTimeoutMs = {{ public_device_idle_timeout_seconds }} * 1000;
+        const heartbeatIntervalMs = 30 * 1000;
+        let idleTimer;
+        let lastHeartbeatAt = 0;
+
+        const finishPublicSession = () => {
+          fetch("/logout", {
+            method: "POST",
+            credentials: "same-origin",
+            keepalive: true,
+          }).finally(() => {
+            window.location.replace("/login?public_timeout=1");
+          });
+        };
+
+        const scheduleIdleTimeout = () => {
+          window.clearTimeout(idleTimer);
+          idleTimer = window.setTimeout(finishPublicSession, idleTimeoutMs);
+        };
+
+        const recordActivity = () => {
+          scheduleIdleTimeout();
+          const now = Date.now();
+          if (now - lastHeartbeatAt < heartbeatIntervalMs) {
+            return;
+          }
+          lastHeartbeatAt = now;
+          fetch("/session/activity", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "X-Requested-With": "fetch" },
+            keepalive: true,
+          }).then((response) => {
+            if (response.redirected || response.status === 401 || response.status === 403) {
+              window.location.replace("/login?public_timeout=1");
+            }
+          }).catch(() => {});
+        };
+
+        ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) => {
+          window.addEventListener(eventName, recordActivity, { passive: true });
+        });
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            recordActivity();
+          }
+        });
+        scheduleIdleTimeout();
+      })();
+      {% endif %}
+
+      (() => {
+        const paginationLinkSelector = "a[data-pagination-target]";
+        const parser = new DOMParser();
+
+        const restoreScrollPosition = (position) => {
+          window.requestAnimationFrame(() => {
+            window.scrollTo(position.x, position.y);
+          });
+        };
+
+        const replacePaginatedSection = async (link, updateHistory = true) => {
+          const targetId = link.dataset.paginationTarget;
+          const currentSection = targetId ? document.getElementById(targetId) : null;
+          if (!targetId || !currentSection) {
+            return false;
+          }
+
+          const scrollPosition = { x: window.scrollX, y: window.scrollY };
+          currentSection.setAttribute("aria-busy", "true");
+
+          try {
+            const response = await fetch(link.href, {
+              credentials: "same-origin",
+              headers: {
+                "Accept": "text/html",
+                "X-Requested-With": "fetch"
+              }
+            });
+            if (!response.ok) {
+              return false;
+            }
+
+            const nextDocument = parser.parseFromString(await response.text(), "text/html");
+            const nextSection = nextDocument.getElementById(targetId);
+            if (!nextSection) {
+              return false;
+            }
+
+            nextSection.removeAttribute("aria-busy");
+            currentSection.replaceWith(nextSection);
+            if (updateHistory) {
+              window.history.pushState({ paginationTarget: targetId }, "", link.href);
+            }
+            restoreScrollPosition(scrollPosition);
+            return true;
+          } catch (error) {
+            console.warn("Trip Tracker pagination update failed.", error);
+            return false;
+          } finally {
+            const activeSection = document.getElementById(targetId);
+            if (activeSection) {
+              activeSection.removeAttribute("aria-busy");
+            }
+          }
+        };
+
+        document.addEventListener("click", (event) => {
+          const clickedElement = event.target instanceof Element ? event.target : null;
+          const link = clickedElement ? clickedElement.closest(paginationLinkSelector) : null;
+          if (
+            !link ||
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.altKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.shiftKey
+          ) {
+            return;
+          }
+
+          event.preventDefault();
+          replacePaginatedSection(link).then((handled) => {
+            if (!handled) {
+              window.location.assign(link.href);
+            }
+          });
+        });
+
+        window.addEventListener("popstate", (event) => {
+          const targetId = event.state ? event.state.paginationTarget : null;
+          if (!targetId || !document.getElementById(targetId)) {
+            return;
+          }
+
+          const link = document.createElement("a");
+          link.href = window.location.href;
+          link.dataset.paginationTarget = targetId;
+          replacePaginatedSection(link, false);
+        });
+      })();
+
+    </script>
+    {% endif %}
+  </body>
+</html>

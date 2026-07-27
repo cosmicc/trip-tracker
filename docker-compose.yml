@@ -4,9 +4,9 @@ services:
     profiles: ["local-postgres"]
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-mileage_logger}
-      POSTGRES_USER: ${POSTGRES_USER:-mileage}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mileage}
+      POSTGRES_DB: ${POSTGRES_DB:-trip_tracker}
+      POSTGRES_USER: ${POSTGRES_USER:-triptracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triptracker}
       TZ: "${LOCAL_TIMEZONE:-America/Detroit}"
     volumes:
       # Persistent database storage. Rebuilds and container recreates keep this volume;
@@ -18,11 +18,11 @@ services:
       timeout: 3s
       retries: 10
 
-  mlapp:
+  ttapp:
     build: .
     restart: unless-stopped
     environment:
-      APP_NAME: "${APP_NAME:-Mileage Logger}"
+      APP_NAME: "${APP_NAME:-Trip Tracker}"
       APP_ENV: "${APP_ENV:-production}"
       SECRET_KEY: "${SECRET_KEY:?SECRET_KEY must be set; run scripts/init_docker_env.sh or set a unique random value}"
       LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-America/Detroit}"
@@ -33,7 +33,7 @@ services:
       WEB_SESSION_COOKIE_SECURE: "${WEB_SESSION_COOKIE_SECURE:-false}"
       WEB_LOGIN_MAX_ATTEMPTS: "${WEB_LOGIN_MAX_ATTEMPTS:-5}"
       WEB_LOGIN_LOCKOUT_SECONDS: "${WEB_LOGIN_LOCKOUT_SECONDS:-300}"
-      PASSKEY_RP_NAME: "${PASSKEY_RP_NAME:-Mileage Logger}"
+      PASSKEY_RP_NAME: "${PASSKEY_RP_NAME:-Trip Tracker}"
       PASSKEY_RP_ID: "${PASSKEY_RP_ID:-}"
       PASSKEY_ORIGIN: "${PASSKEY_ORIGIN:-}"
       CLOUDFLARE_IP_BLOCKING_ENABLED: "${CLOUDFLARE_IP_BLOCKING_ENABLED:-false}"
@@ -50,6 +50,7 @@ services:
       PUSHOVER_PRIORITY: "${PUSHOVER_PRIORITY:-0}"
       PUSHOVER_TIMEOUT_SECONDS: "${PUSHOVER_TIMEOUT_SECONDS:-10}"
       APP_HEALTH_MONITOR_INTERVAL_SECONDS: "${APP_HEALTH_MONITOR_INTERVAL_SECONDS:-60}"
+      APP_HEALTH_REMINDER_INTERVAL_SECONDS: "${APP_HEALTH_REMINDER_INTERVAL_SECONDS:-3600}"
       APP_HEALTH_DB_LATENCY_WARNING_MS: "${APP_HEALTH_DB_LATENCY_WARNING_MS:-500}"
       APP_HEALTH_DB_LATENCY_CRITICAL_MS: "${APP_HEALTH_DB_LATENCY_CRITICAL_MS:-2000}"
       APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS: "${APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS:-15}"
@@ -58,7 +59,7 @@ services:
       APP_HEALTH_STATE_PATH: "${APP_HEALTH_STATE_PATH:-/data/app-health-state.json}"
       WEB_API_KEY: "${WEB_API_KEY:?WEB_API_KEY must be set for protected API access}"
       CREATE_TABLES_ON_STARTUP: "${CREATE_TABLES_ON_STARTUP:-false}"
-      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://mileage:mileage@postgres:5432/mileage_logger}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://triptracker:triptracker@postgres:5432/trip_tracker}"
       DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-5}"
       DATABASE_MAX_OVERFLOW: "${DATABASE_MAX_OVERFLOW:-10}"
       DATABASE_POOL_TIMEOUT_SECONDS: "${DATABASE_POOL_TIMEOUT_SECONDS:-30}"
@@ -92,8 +93,8 @@ services:
       AUTOMATIC_BACKUP_DIR: "${AUTOMATIC_BACKUP_DIR:-/data/backups}"
       AUTOMATIC_BACKUP_RETRY_SECONDS: "${AUTOMATIC_BACKUP_RETRY_SECONDS:-60}"
     volumes:
-      - ${HOST_DATA_DIR:-/var/lib/mileage-logger}:/data
-      - ${HOST_BACKUP_DIR:-/var/lib/mileage-logger/backups}:/data/backups
+      - ${HOST_DATA_DIR:-/var/lib/trip-tracker}:/data
+      - ${HOST_BACKUP_DIR:-/var/lib/trip-tracker/backups}:/data/backups
     healthcheck:
       test:
         [
@@ -105,7 +106,7 @@ services:
       retries: 5
       start_period: "${APP_HEALTHCHECK_START_PERIOD:-90s}"
 
-  mlnginx:
+  ttnginx:
     build:
       context: .
       dockerfile: deploy/nginx/Dockerfile
@@ -116,7 +117,7 @@ services:
       WEB_ALLOWED_CIDRS: "${WEB_ALLOWED_CIDRS:-}"
       TZ: "${LOCAL_TIMEZONE:-America/Detroit}"
     depends_on:
-      mlapp:
+      ttapp:
         condition: service_healthy
 
   cloudflared:
@@ -131,8 +132,9 @@ services:
       TUNNEL_TRANSPORT_PROTOCOL: "${CLOUDFLARED_TRANSPORT_PROTOCOL:-auto}"
       TZ: "${LOCAL_TIMEZONE:-America/Detroit}"
     depends_on:
-      mlnginx:
+      ttnginx:
         condition: service_started
 
 volumes:
   postgres_data:
+    name: "${POSTGRES_DATA_VOLUME:-trip-tracker-postgres-data}"

@@ -1,13 +1,13 @@
 # Docker Swarm stack file. Build and tag images before deploying, or set APP_IMAGE and
 # NGINX_IMAGE to registry-hosted images available to every Swarm node.
 services:
-  mlapp:
-    image: "${APP_IMAGE:-mileage-logger-app:latest}"
+  ttapp:
+    image: "${APP_IMAGE:-trip-tracker-app:latest}"
     user: "${APP_UID:-1000}:${APP_GID:-100}"
     networks:
-      - mileage-internal
+      - trip-tracker-internal
     environment:
-      APP_NAME: "${APP_NAME:-Mileage Logger}"
+      APP_NAME: "${APP_NAME:-Trip Tracker}"
       APP_ENV: "${APP_ENV:-production}"
       SECRET_KEY: "${SECRET_KEY:?SECRET_KEY must be set; use a unique random value}"
       LOCAL_TIMEZONE: "${LOCAL_TIMEZONE:-America/Detroit}"
@@ -18,7 +18,7 @@ services:
       WEB_SESSION_COOKIE_SECURE: "${WEB_SESSION_COOKIE_SECURE:-false}"
       WEB_LOGIN_MAX_ATTEMPTS: "${WEB_LOGIN_MAX_ATTEMPTS:-5}"
       WEB_LOGIN_LOCKOUT_SECONDS: "${WEB_LOGIN_LOCKOUT_SECONDS:-300}"
-      PASSKEY_RP_NAME: "${PASSKEY_RP_NAME:-Mileage Logger}"
+      PASSKEY_RP_NAME: "${PASSKEY_RP_NAME:-Trip Tracker}"
       PASSKEY_RP_ID: "${PASSKEY_RP_ID:-}"
       PASSKEY_ORIGIN: "${PASSKEY_ORIGIN:-}"
       CLOUDFLARE_IP_BLOCKING_ENABLED: "${CLOUDFLARE_IP_BLOCKING_ENABLED:-false}"
@@ -35,6 +35,7 @@ services:
       PUSHOVER_PRIORITY: "${PUSHOVER_PRIORITY:-0}"
       PUSHOVER_TIMEOUT_SECONDS: "${PUSHOVER_TIMEOUT_SECONDS:-10}"
       APP_HEALTH_MONITOR_INTERVAL_SECONDS: "${APP_HEALTH_MONITOR_INTERVAL_SECONDS:-60}"
+      APP_HEALTH_REMINDER_INTERVAL_SECONDS: "${APP_HEALTH_REMINDER_INTERVAL_SECONDS:-3600}"
       APP_HEALTH_DB_LATENCY_WARNING_MS: "${APP_HEALTH_DB_LATENCY_WARNING_MS:-500}"
       APP_HEALTH_DB_LATENCY_CRITICAL_MS: "${APP_HEALTH_DB_LATENCY_CRITICAL_MS:-2000}"
       APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS: "${APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS:-15}"
@@ -43,7 +44,7 @@ services:
       APP_HEALTH_STATE_PATH: "${APP_HEALTH_STATE_PATH:-/data/app-health-state.json}"
       WEB_API_KEY: "${WEB_API_KEY:?WEB_API_KEY must be set for protected API access}"
       CREATE_TABLES_ON_STARTUP: "${CREATE_TABLES_ON_STARTUP:-false}"
-      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://mileage:mileage@postgres:5432/mileage_logger}"
+      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://triptracker:triptracker@postgres:5432/trip_tracker}"
       DATABASE_POOL_SIZE: "${DATABASE_POOL_SIZE:-5}"
       DATABASE_MAX_OVERFLOW: "${DATABASE_MAX_OVERFLOW:-10}"
       DATABASE_POOL_TIMEOUT_SECONDS: "${DATABASE_POOL_TIMEOUT_SECONDS:-30}"
@@ -77,8 +78,8 @@ services:
       AUTOMATIC_BACKUP_DIR: "${AUTOMATIC_BACKUP_DIR:-/data/backups}"
       AUTOMATIC_BACKUP_RETRY_SECONDS: "${AUTOMATIC_BACKUP_RETRY_SECONDS:-60}"
     volumes:
-      - ${HOST_DATA_DIR:-/var/lib/mileage-logger}:/data
-      - ${HOST_BACKUP_DIR:-/var/lib/mileage-logger/backups}:/data/backups
+      - ${HOST_DATA_DIR:-/var/lib/trip-tracker}:/data
+      - ${HOST_BACKUP_DIR:-/var/lib/trip-tracker/backups}:/data/backups
     healthcheck:
       test:
         [
@@ -97,10 +98,10 @@ services:
         parallelism: 1
         order: stop-first
 
-  mlnginx:
-    image: "${NGINX_IMAGE:-mileage-logger-nginx:latest}"
+  ttnginx:
+    image: "${NGINX_IMAGE:-trip-tracker-nginx:latest}"
     networks:
-      - mileage-internal
+      - trip-tracker-internal
     environment:
       WEB_ALLOWED_CIDRS: "${WEB_ALLOWED_CIDRS:-}"
       TZ: "${LOCAL_TIMEZONE:-America/Detroit}"
@@ -115,7 +116,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     networks:
-      - mileage-internal
+      - trip-tracker-internal
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: "${CLOUDFLARED_TUNNEL_TOKEN:?CLOUDFLARED_TUNNEL_TOKEN must be set}"
@@ -136,5 +137,5 @@ services:
         order: start-first
 
 networks:
-  mileage-internal:
+  trip-tracker-internal:
     driver: overlay

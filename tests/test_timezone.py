@@ -1,6 +1,6 @@
 from datetime import UTC, date, datetime
 
-from mileage_logger.services.timezone import (
+from trip_tracker.services.timezone import (
     datetime_to_local,
     datetime_to_local_date,
     local_day_bounds,

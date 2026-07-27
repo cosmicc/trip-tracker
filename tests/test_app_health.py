@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from mileage_logger.config import Settings
-from mileage_logger.services.app_health import (
+from trip_tracker.config import Settings
+from trip_tracker.services.app_health import (
     AppHealthIssue,
     AppHealthMonitor,
     AppHealthSnapshot,
@@ -10,7 +10,7 @@ from mileage_logger.services.app_health import (
     build_app_health_snapshot,
     pushover_configured,
 )
-from mileage_logger.services.runtime_status import (
+from trip_tracker.services.runtime_status import (
     RuntimeDatabaseStatus,
     RuntimeStatus,
 )
@@ -155,7 +155,7 @@ def test_pushover_notifier_sends_degraded_once_and_restored(monkeypatch, tmp_pat
         calls.append({"data": data, "timeout": timeout})
         return Response()
 
-    monkeypatch.setattr("mileage_logger.services.app_health.httpx.post", fake_post)
+    monkeypatch.setattr("trip_tracker.services.app_health.httpx.post", fake_post)
     degraded = AppHealthSnapshot(
         status="degraded",
         severity="warning",
@@ -183,11 +183,118 @@ def test_pushover_notifier_sends_degraded_once_and_restored(monkeypatch, tmp_pat
     assert notifier.notify_if_needed(restored) is True
 
     assert [call["data"]["title"] for call in calls] == [
-        "Mileage Logger degraded",
-        "Mileage Logger restored",
+        "Trip Tracker degraded",
+        "Trip Tracker restored",
     ]
     assert calls[0]["data"]["token"] == "app-token"
     assert calls[0]["data"]["user"] == "user-key"
+
+
+def test_pushover_notifier_repeats_unresolved_degraded_state_each_hour(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    settings = Settings(
+        pushover_enabled=True,
+        pushover_token="app-token",
+        pushover_user="user-key",
+        app_health_state_path=str(tmp_path / "app-health-state.json"),
+        app_health_reminder_interval_seconds=3600,
+    )
+    titles: list[str] = []
+
+    def fake_send(_settings, *, title, message, priority=None):
+        titles.append(title)
+
+    monkeypatch.setattr(
+        "trip_tracker.services.app_health.send_pushover_message",
+        fake_send,
+    )
+
+    def degraded_snapshot(checked_at: datetime) -> AppHealthSnapshot:
+        return AppHealthSnapshot(
+            status="degraded",
+            severity="warning",
+            issues=(
+                AppHealthIssue(
+                    key="disk./data",
+                    severity="warning",
+                    title="Disk space low",
+                    detail="/data has 900.0 MiB free.",
+                ),
+            ),
+            checked_at=checked_at,
+        )
+
+    notifier = PushoverAppHealthNotifier(settings)
+    first_alert_at = datetime(2026, 7, 27, 12, 0, tzinfo=UTC)
+
+    assert notifier.notify_if_needed(degraded_snapshot(first_alert_at)) is True
+    notifier = PushoverAppHealthNotifier(settings)
+    assert notifier.notify_if_needed(
+        degraded_snapshot(first_alert_at.replace(minute=59))
+    ) is False
+    notifier = PushoverAppHealthNotifier(settings)
+    assert notifier.notify_if_needed(
+        degraded_snapshot(first_alert_at.replace(hour=13))
+    ) is True
+    notifier = PushoverAppHealthNotifier(settings)
+    assert notifier.notify_if_needed(
+        degraded_snapshot(first_alert_at.replace(hour=14))
+    ) is True
+
+    assert titles == [
+        "Trip Tracker degraded",
+        "Trip Tracker degraded reminder",
+        "Trip Tracker degraded reminder",
+    ]
+
+
+def test_pushover_notifier_repeats_unresolved_unavailable_state_each_hour(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    settings = Settings(
+        pushover_enabled=True,
+        pushover_token="app-token",
+        pushover_user="user-key",
+        app_health_state_path=str(tmp_path / "app-health-state.json"),
+        app_health_reminder_interval_seconds=3600,
+    )
+    titles: list[str] = []
+    monkeypatch.setattr(
+        "trip_tracker.services.app_health.send_pushover_message",
+        lambda _settings, *, title, message, priority=None: titles.append(title),
+    )
+    issue = AppHealthIssue(
+        key="database.unavailable",
+        severity="critical",
+        title="PostgreSQL unavailable",
+        detail="The configured database is not accepting app queries.",
+    )
+    notifier = PushoverAppHealthNotifier(settings)
+
+    assert notifier.notify_if_needed(
+        AppHealthSnapshot(
+            status="unavailable",
+            severity="critical",
+            issues=(issue,),
+            checked_at=datetime(2026, 7, 27, 12, 0, tzinfo=UTC),
+        )
+    )
+    assert notifier.notify_if_needed(
+        AppHealthSnapshot(
+            status="unavailable",
+            severity="critical",
+            issues=(issue,),
+            checked_at=datetime(2026, 7, 27, 13, 0, tzinfo=UTC),
+        )
+    )
+
+    assert titles == [
+        "Trip Tracker unavailable",
+        "Trip Tracker unavailable reminder",
+    ]
 
 
 def test_pushover_accepts_app_and_user_key_aliases() -> None:
@@ -223,7 +330,7 @@ def test_app_health_monitor_requires_sustained_latency_before_notification(
         checked_at=datetime(2026, 7, 13, 12, 0, tzinfo=UTC),
     )
     monkeypatch.setattr(
-        "mileage_logger.services.app_health.time.monotonic",
+        "trip_tracker.services.app_health.time.monotonic",
         lambda: now[0],
     )
 
@@ -262,7 +369,7 @@ def test_app_health_monitor_resets_latency_timer_after_recovery(monkeypatch) -> 
         checked_at=datetime(2026, 7, 13, 12, 0, 5, tzinfo=UTC),
     )
     monkeypatch.setattr(
-        "mileage_logger.services.app_health.time.monotonic",
+        "trip_tracker.services.app_health.time.monotonic",
         lambda: now[0],
     )
 

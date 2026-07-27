@@ -4,9 +4,9 @@
 
 ## Overview
 
-Mileage Logger uses:
-- **API routes** (`mileage_logger/api/routes.py`) — JSON responses for OwnTracks integration
-- **Web routes** (`mileage_logger/web/routes.py`) — Server-rendered HTML pages via Jinja2
+Trip Tracker uses:
+- **API routes** (`trip_tracker/api/routes.py`) — JSON responses for OwnTracks integration
+- **Web routes** (`trip_tracker/web/routes.py`) — Server-rendered HTML pages via Jinja2
 - **Authentication** — Web login (session-based) + OwnTracks API authentication
 - **FastAPI** — Modern async web framework with automatic OpenAPI docs
 
@@ -16,14 +16,14 @@ Mileage Logger uses:
 
 ### Location
 
-[mileage_logger/api/routes.py](mileage_logger/api/routes.py)
+[trip_tracker/api/routes.py](trip_tracker/api/routes.py)
 
 ### Basic Pattern
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from mileage_logger.database import get_db
+from trip_tracker.database import get_db
 
 router = APIRouter()
 
@@ -84,8 +84,8 @@ container health checks. Do not reuse `OWNTRACKS_ENCRYPTION_KEY` as `WEB_API_KEY
 ### Protecting Endpoints
 
 ```python
-from mileage_logger.api.deps import verify_owntracks_auth
-from mileage_logger.services.owntracks import process_owntracks_payload
+from trip_tracker.api.deps import verify_owntracks_auth
+from trip_tracker.services.owntracks import process_owntracks_payload
 
 @router.post("/owntracks")
 async def owntracks_http(request: Request) -> JSONResponse:
@@ -126,13 +126,13 @@ of app JSON errors.
 
 Database-outage web handling is different from normal HTTP errors. The app-level limp-mode
 middleware renders `web/templates/limp_mode.html` for browser paths when PostgreSQL is unreachable
-and returns HTTP 200 with `X-Mileage-Logger-Limp-Mode: true` so nginx does not replace it with the
+and returns HTTP 200 with `X-Trip-Tracker-Limp-Mode: true` so nginx does not replace it with the
 generic 503 page. Non-OwnTracks API paths return 503 JSON during limp mode.
 Full-page Dashboard and Work Trips requests preflight PostgreSQL reachability and render the
 limp-mode page instead of their normal loading shells during an outage. JavaScript content fetches
 must receive only `web/templates/_limp_mode_panel.html` so the fetched HTML can replace the shell
 without nesting another `layout.html` top bar; shell JavaScript should redirect to `/` if the
-content response has `X-Mileage-Logger-Limp-Mode: true` so stale navigation is not left on screen.
+content response has `X-Trip-Tracker-Limp-Mode: true` so stale navigation is not left on screen.
 While `limp_mode_active` is set, the full outage page hides shared app chrome, navigation, icons,
 and service-worker registration. The page uses the end-user facing `Service Temporarily
 Unavailable` heading, avoids host/IP/connection-string details and database status cards, and
@@ -156,7 +156,7 @@ WEB_API_KEY=separate-web-api-key
 
 ### Step 1: Define Request/Response Models
 
-Edit [mileage_logger/schemas.py](mileage_logger/schemas.py):
+Edit [trip_tracker/schemas.py](trip_tracker/schemas.py):
 
 ```python
 from pydantic import BaseModel, Field
@@ -174,7 +174,7 @@ class MyResponseModel(BaseModel):
 
 ### Step 2: Add the Route
 
-Edit [mileage_logger/api/routes.py](mileage_logger/api/routes.py):
+Edit [trip_tracker/api/routes.py](trip_tracker/api/routes.py):
 
 ```python
 @router.post("/custom-endpoint")
@@ -232,7 +232,7 @@ curl -X POST http://localhost:8000/api/owntracks \
 
 ### Location
 
-[mileage_logger/web/routes.py](mileage_logger/web/routes.py)
+[trip_tracker/web/routes.py](trip_tracker/web/routes.py)
 
 ### Trips Page Form Boundary
 
@@ -281,7 +281,7 @@ curl -X POST http://localhost:8000/api/owntracks \
 - `layout.html` keeps authenticated navigation in the shared top bar. Desktop nav links use one
   centered blue raised button treatment, with icons shown to the left of text labels. The
   authenticated header brand uses the cleaned transparent logo asset and shows the current app
-  version as a small readable line directly under the Mileage Logger title, while installable app
+  version as a small readable line directly under the Trip Tracker title, while installable app
   icons use launcher-safe padding from the transparent logo and the favicon stays on the square
   original logo. When icon assets change, update the static icon cache-busting query in
   `layout.html` and `manifest.webmanifest`. On mobile, CSS hides the brand/icon and keeps nav links
@@ -292,7 +292,7 @@ curl -X POST http://localhost:8000/api/owntracks \
   touch icon links. Keep the mobile viewport non-edge-to-edge, and preserve the manifest browser
   fallback on authenticated app pages so phone system navigation remains visible. The brand
   icon/text is display-only and not a home link.
-- The active app color palette lives in `mileage_logger/web/static/styles.css`. Palette samples are
+- The active app color palette lives in `trip_tracker/web/static/styles.css`. Palette samples are
   saved in `docs/design/color-palettes.svg`; Option A is the current palette. Approved Monthly Work
   Trips row colors are blue (`#4BA3FF`) for automatic trips, purple (`#A855F7`) for edited trips,
   and gold (`#E2AD45`) for manual trips. Do not apply a new app-wide palette until the user chooses
@@ -323,17 +323,19 @@ curl -X POST http://localhost:8000/api/owntracks \
 - Diagnostics hard drive space rows group configured runtime paths as the same drive only when
   exact used bytes and total bytes both match. Keep this grouping rule aligned with the visible
   drive-space bars and database summary in `diagnostics.html`. The Diagnostics Application card
-  also shows the source-controlled app version from `mileage_logger.__version__`.
+  also shows the source-controlled app version from `trip_tracker.__version__`.
 - The Diagnostics Data card shows record counts and the lowest/highest queried gas price readings
   from `gas_price_snapshots.price_per_gallon`. Do not use `MonthlyGasPrice` averages for these
   high/low values.
 - Diagnostics degraded/unavailable banners and Pushover app-health notifications must use
-  `mileage_logger.services.app_health.build_app_health_snapshot()`. Keep monitored signals aligned:
+  `trip_tracker.services.app_health.build_app_health_snapshot()`. Keep monitored signals aligned:
   PostgreSQL availability/latency, runtime free disk space, active web-login lockouts, and
   app-managed Cloudflare IP blocks. Diagnostics shows each current database latency reading, but
   Pushover must wait `APP_HEALTH_DB_LATENCY_SUSTAINED_SECONDS` and confirm latency is still high.
   Disk health uses `APP_HEALTH_DISK_WARNING_FREE_MB` and `APP_HEALTH_DISK_CRITICAL_FREE_MB`, not
-  used-percentage alarm thresholds.
+  used-percentage alarm thresholds. Preserve immediate issue-change and restoration alerts, and
+  repeat unchanged degraded or unavailable states every
+  `APP_HEALTH_REMINDER_INTERVAL_SECONDS` (one hour by default).
 
 ### Basic Pattern
 
@@ -359,7 +361,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> TemplateRespon
 
 ### Jinja2 Template Filters
 
-Custom filters are registered in [web/routes.py](mileage_logger/web/routes.py):
+Custom filters are registered in [web/routes.py](trip_tracker/web/routes.py):
 
 ```python
 def _format_local_datetime(value, fmt: str = "%Y-%m-%d %I:%M:%S %p") -> str:
@@ -376,7 +378,7 @@ templates.env.filters["local_datetime"] = _format_local_datetime
 
 ### Step 1: Create Jinja2 Template
 
-Create file: `mileage_logger/web/templates/my_page.html`
+Create file: `trip_tracker/web/templates/my_page.html`
 
 ```html
 {% extends "layout.html" %}
@@ -395,7 +397,7 @@ Create file: `mileage_logger/web/templates/my_page.html`
 
 ### Step 2: Add the Route
 
-Edit [mileage_logger/web/routes.py](mileage_logger/web/routes.py):
+Edit [trip_tracker/web/routes.py](trip_tracker/web/routes.py):
 
 ```python
 @router.get("/my-page", response_class=HTMLResponse)
@@ -418,7 +420,7 @@ def my_page(
 
 ### Step 3: Add Navigation Link
 
-Edit `mileage_logger/web/templates/layout.html`:
+Edit `trip_tracker/web/templates/layout.html`:
 
 ```html
 <nav>
@@ -446,7 +448,7 @@ WEB_LOGIN_PASSWORD=secret
 WEB_ALLOWED_CIDRS=192.168.1.0/24,10.8.0.0/24
 
 # Optional: override WebAuthn relying-party settings for passkeys
-PASSKEY_RP_NAME=Mileage Logger
+PASSKEY_RP_NAME=Trip Tracker
 PASSKEY_RP_ID=mileage.example.com
 PASSKEY_ORIGIN=https://mileage.example.com
 
@@ -457,7 +459,7 @@ WEB_SESSION_COOKIE_SECURE=false
 ### Protecting Routes
 
 ```python
-from mileage_logger.web.auth import authenticate_web_credentials
+from trip_tracker.web.auth import authenticate_web_credentials
 
 @router.get("/protected-page")
 def protected_page(request: Request) -> TemplateResponse:
@@ -589,7 +591,7 @@ async def create_trip(
 ### Getting a Session
 
 ```python
-from mileage_logger.database import get_db
+from trip_tracker.database import get_db
 
 @router.get("/trips")
 def list_trips(db: Session = Depends(get_db)):
@@ -690,7 +692,7 @@ Use named loggers for different modules:
 ```python
 import logging
 
-logger = logging.getLogger(__name__)  # Gets "mileage_logger.api.routes"
+logger = logging.getLogger(__name__)  # Gets "trip_tracker.api.routes"
 
 @router.post("/trips/{trip_id}")
 def update_trip(...):
@@ -702,7 +704,7 @@ All application logging is console-only so Docker Compose and Docker Swarm can o
 delivery. Do not add `FileHandler`, `RotatingFileHandler`, or Diagnostics app-log panels/downloads.
 
 The Diagnostics page reads `web_login_audits` through
-`mileage_logger.services.login_failures.tail_login_success_entries()` and
+`trip_tracker.services.login_failures.tail_login_success_entries()` and
 `tail_login_failure_entries()`. When changing login, diagnostics, or web authentication behavior,
 preserve the successful-login table above the failed-login table, the failed-login table actions,
 and the compatibility `/diagnostics/logs/login-failures` database-backed JSON Lines export endpoint.
@@ -714,7 +716,7 @@ credentials, and removes only the selected `passkey_credentials` row. Keep the t
 cards grouped together in this order unless the page is reorganized deliberately: Application,
 System Status, Data, Latest Records, OwnTracks State, Manual Odometer, EIA API, Configure
 Passkey, and Hard Drive Space. The System Status card uses
-`mileage_logger.services.runtime_status.build_runtime_status()` for PostgreSQL local/remote
+`trip_tracker.services.runtime_status.build_runtime_status()` for PostgreSQL local/remote
 placement, and route-level Diagnostics helpers add
 safe latency, database size, total app records, pool, and timeout details without exposing full
 connection strings. Database latency should render with the same status-dot pattern as other
@@ -752,7 +754,7 @@ Diagnostics exposes full app data backup and restore through:
 - `GET /diagnostics/automatic-backups/download?filename=...`
 - `POST /diagnostics/restore`
 - `POST /diagnostics/automatic-backups/restore`
-- `mileage_logger.services.backups`
+- `trip_tracker.services.backups`
 
 These routes are sensitive because backups contain location history and restore replaces current
 app rows. Keep them behind configured web login, keep `Cache-Control: no-store` on backup
@@ -809,7 +811,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 All routes can access settings:
 
 ```python
-from mileage_logger.config import get_settings
+from trip_tracker.config import get_settings
 
 @router.get("/config")
 def get_config() -> dict[str, str]:
@@ -828,7 +830,7 @@ def get_config() -> dict[str, str]:
 
 ```python
 from fastapi.testclient import TestClient
-from mileage_logger.app import app
+from trip_tracker.app import app
 
 client = TestClient(app)
 
@@ -856,7 +858,7 @@ See [tests/test_web.py](tests/test_web.py) for examples of testing:
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Jinja2 Template Documentation](https://jinja.palletsprojects.com/)
-- [api/routes.py](mileage_logger/api/routes.py) — Existing API endpoints
-- [web/routes.py](mileage_logger/web/routes.py) — Existing web routes
-- [web/templates/](mileage_logger/web/templates/) — Template examples
-- [schemas.py](mileage_logger/schemas.py) — Request/response models
+- [api/routes.py](trip_tracker/api/routes.py) — Existing API endpoints
+- [web/routes.py](trip_tracker/web/routes.py) — Existing web routes
+- [web/templates/](trip_tracker/web/templates/) — Template examples
+- [schemas.py](trip_tracker/schemas.py) — Request/response models

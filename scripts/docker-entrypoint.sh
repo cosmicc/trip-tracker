@@ -10,8 +10,8 @@ import time
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ArgumentError
 
-from mileage_logger.config import Settings
-from mileage_logger.database_engine import database_engine_options, normalized_database_url
+from trip_tracker.config import Settings
+from trip_tracker.database_engine import database_engine_options, normalized_database_url
 
 timeout = int(sys.argv[1])
 settings = Settings()

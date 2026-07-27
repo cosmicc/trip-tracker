@@ -4,7 +4,7 @@
 
 ## Overview
 
-The mileage calculation system in [mileage_logger/services/mileage.py](mileage_logger/services/mileage.py) is responsible for:
+The mileage calculation system in [trip_tracker/services/mileage.py](trip_tracker/services/mileage.py) is responsible for:
 1. Calculating trip distance from OwnTracks coordinates or waypoint coordinates
 2. Estimating start/end odometer values
 3. Managing the rolling odometer checkpoint
@@ -225,7 +225,7 @@ labels = {
 ### Create a Manual Trip
 
 ```python
-from mileage_logger.services.mileage import create_manual_trip
+from trip_tracker.services.mileage import create_manual_trip
 
 trip = create_manual_trip(
     db,
@@ -262,7 +262,7 @@ trip before committing.
 ### Update Trip Details
 
 ```python
-from mileage_logger.services.mileage import update_trip_details
+from trip_tracker.services.mileage import update_trip_details
 
 update_trip_details(
     trip,
@@ -325,7 +325,7 @@ blank odometers are healed after deployment.
 ### Delete a Trip
 
 ```python
-from mileage_logger.services.mileage import delete_trip
+from trip_tracker.services.mileage import delete_trip
 
 delete_trip(db, trip)
 ```
@@ -407,7 +407,7 @@ ROUNDING = ROUND_HALF_UP                   # Standard rounding
 ### Calculate Trip Mileage Manually
 
 ```python
-from mileage_logger.services.mileage import haversine_miles
+from trip_tracker.services.mileage import haversine_miles
 
 miles = haversine_miles(
     lat1=Decimal("42.3314"),
@@ -421,7 +421,7 @@ print(f"Distance: {miles} miles")
 ### Find All Trips for a Month
 
 ```python
-from mileage_logger.services.pdf import trips_for_month
+from trip_tracker.services.pdf import trips_for_month
 
 trips = trips_for_month(db, year=2026, month=6)
 total_miles = sum(trip.miles for trip in trips)
@@ -431,7 +431,7 @@ print(f"June 2026: {total_miles} miles across {len(trips)} trips")
 ### Get Monthly Mileage Total
 
 ```python
-from mileage_logger.services.mileage import monthly_miles
+from trip_tracker.services.mileage import monthly_miles
 
 total = monthly_miles(db, year=2026, month=6)
 print(f"June 2026 total: {total} miles")
@@ -440,8 +440,8 @@ print(f"June 2026 total: {total} miles")
 ### Calculate Reimbursement
 
 ```python
-from mileage_logger.services.pdf import calculate_reimbursement
-from mileage_logger.config import get_settings
+from trip_tracker.services.pdf import calculate_reimbursement
+from trip_tracker.config import get_settings
 
 settings = get_settings()
 reimbursement = calculate_reimbursement(
@@ -487,7 +487,7 @@ for i, trip in enumerate(trips, 1):
 ### Check Checkpoint State
 
 ```python
-from mileage_logger.services.trip_processor import _get_or_create_checkpoint
+from trip_tracker.services.trip_processor import _get_or_create_checkpoint
 
 checkpoint = _get_or_create_checkpoint(db)
 print(f"Odometer anchor: {checkpoint.odometer_anchor_miles} miles")
@@ -519,7 +519,7 @@ def test_trip_mileage_fallback_to_waypoint_distance():
 
 ## References
 
-- [mileage.py](mileage_logger/services/mileage.py) — Core implementation
-- [trip_processor.py](mileage_logger/services/trip_processor.py) — Checkpoint management
-- [models.py](mileage_logger/models.py) — Trip, Site, TripProcessingCheckpoint models
+- [mileage.py](trip_tracker/services/mileage.py) — Core implementation
+- [trip_processor.py](trip_tracker/services/trip_processor.py) — Checkpoint management
+- [models.py](trip_tracker/models.py) — Trip, Site, TripProcessingCheckpoint models
 - [README.md](README.md#Trip-Detection) — Trip generation overview
