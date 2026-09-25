@@ -219,8 +219,8 @@ def test_swarm_stack_has_optional_local_postgres_overlay() -> None:
     )
     assert "POSTGRES_DATA_VOLUME=trip-tracker-postgres-data" in env_text
     assert "trip-tracker-internal" in local_postgres_text
-    assert "APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0" in env_text
-    assert "NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0" in env_text
+    assert "APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.1" in env_text
+    assert "NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.1" in env_text
     assert "APP_UID=1000" in env_text
     assert "APP_GID=100" in env_text
 

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from trip_tracker.models import Base, OwnTracksLocation, Site, Trip
 from trip_tracker.services.owntracks import parse_owntracks_location, process_owntracks_payload
+from trip_tracker.services.trip_processor import run_automatic_trip_processing
 
 
 def _session() -> Session:
@@ -84,7 +85,7 @@ def test_process_owntracks_location_with_region_does_not_create_waypoint() -> No
     assert before_receive <= received_at <= after_receive
 
 
-def test_process_owntracks_payload_automatically_creates_trip() -> None:
+def test_process_owntracks_payload_defers_trip_creation_to_background_processor() -> None:
     db = _session()
     day = datetime(2030, 1, 1, 13, 0, tzinfo=UTC)
     db.add_all(
@@ -134,6 +135,10 @@ def test_process_owntracks_payload_automatically_creates_trip() -> None:
             }
         ).encode("utf-8"),
     )
+
+    assert list(db.scalars(select(Trip))) == []
+
+    run_automatic_trip_processing(db, now=day + timedelta(minutes=40))
 
     trips = list(db.scalars(select(Trip).order_by(Trip.started_at.asc())))
     client_a = db.scalar(select(Site).where(Site.name == "Client A"))

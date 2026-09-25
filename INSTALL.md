@@ -339,11 +339,11 @@ Swarm does not build images during `docker stack deploy`, does not support Compo
 does not preserve the normal Compose loopback-only nginx port binding. The Swarm stack therefore
 uses image tags and overlay networking. The `Build and publish Swarm images` GitHub workflow
 publishes the app and nginx images to GHCR with the package version, `latest`, and an immutable
-commit-SHA tag. For v1.5.0, use:
+commit-SHA tag. For v1.5.1, use:
 
 ```bash
-APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0
-NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0
+APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.1
+NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.1
 ```
 
 If the GHCR packages are private, configure GHCR registry credentials in Portainer or authenticate
@@ -356,8 +356,8 @@ needed variables in the shell before deploying.
 Remote PostgreSQL Swarm deployment:
 
 ```bash
-export APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0
-export NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0
+export APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.1
+export NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.1
 export DATABASE_URL=postgresql+psycopg://triptracker:url_encoded_password@central-db-host:5432/trip_tracker
 docker stack deploy -c docker-stack.yml trip-tracker
 ```
@@ -365,8 +365,8 @@ docker stack deploy -c docker-stack.yml trip-tracker
 Bundled PostgreSQL Swarm deployment:
 
 ```bash
-export APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.0
-export NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.0
+export APP_IMAGE=ghcr.io/cosmicc/trip-tracker-app:1.5.1
+export NGINX_IMAGE=ghcr.io/cosmicc/trip-tracker-nginx:1.5.1
 export DATABASE_URL=postgresql+psycopg://triptracker:your-db-password@postgres:5432/trip_tracker
 docker stack deploy -c docker-stack.yml -c docker-stack.local-postgres.yml trip-tracker
 ```

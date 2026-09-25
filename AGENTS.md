@@ -97,6 +97,9 @@ backward-compatibility handling.
   PostgreSQL or migrations are unavailable so OwnTracks retains and retries its own HTTP queue.
 - Returns `200 []` only after PostgreSQL accepts the payload. Exact HTTP retries reuse the existing
   raw event instead of inserting it twice.
+- Returns immediately after the payload commit without waiting for automatic trip generation,
+  odometer calculation, retention cleanup, or the trip processor lock. The background
+  `AutomaticTripProcessor` owns all derived processing on its next pass.
 
 **[login_failures.py](trip_tracker/services/login_failures.py)** — Web login audit logging
 - Stores structured PostgreSQL records for successful and failed web UI login attempts and emits
@@ -335,6 +338,8 @@ dates. Manual trips are not restricted by those indexes.
 - After authentication, decryption, and validation, verify Alembic migrations and attempt the
   PostgreSQL write. Return `200 []` only after the commit succeeds. Return `503`,
   `Retry-After: 30`, and `Cache-Control: no-store` when PostgreSQL or migrations are unavailable.
+- Do not call or wait for `run_automatic_trip_processing()` from the OwnTracks request. Once raw
+  storage commits, return promptly and let the background processor consume the checkpointed rows.
 - The OwnTracks mobile app is the only outage queue. Do not add a server-side SQLite queue, replay
   worker, MQTT subscriber, or queue storage volume.
 - Preserve retry idempotency: an exact resent HTTP event must not create a second raw event row.

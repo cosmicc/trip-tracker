@@ -5,7 +5,7 @@ stores them in PostgreSQL, lets you review and edit generated waypoint work trip
 monthly mileage and expense PDF logs.
 
 Upgrading an existing deployment from 1.4.4 or earlier requires coordinated database, storage,
-service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.0.
+service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.1.
 
 ## Current Scope
 
@@ -16,6 +16,8 @@ service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before 
 - OwnTracks HTTP endpoint at `/api/owntracks` and Recorder-compatible `/api/pub`.
 - Retry-safe HTTP ingestion that returns `503 Service Unavailable` while PostgreSQL is unavailable
   so the OwnTracks mobile app retains and resends its own queued messages after recovery.
+- Fast OwnTracks acknowledgements that return `200 []` immediately after PostgreSQL commits the
+  message; automatic trip generation and odometer processing continue in the background.
 - OwnTracks waypoint transition model used to turn leave/enter events into work trips, with
   location updates between those events used as the primary trip distance.
 - Manual current-odometer entry from the Diagnostics page, with the Manual Odometer card showing
@@ -141,8 +143,8 @@ Docker Swarm deployments use [docker-stack.yml](docker-stack.yml) instead of `do
 Swarm cannot build images, use Compose profiles, or keep the normal Compose loopback-only port
 binding. The `Build and publish Swarm images` GitHub workflow publishes versioned, `latest`, and
 commit-SHA app and nginx images to GHCR. Set `APP_IMAGE` to
-`ghcr.io/cosmicc/trip-tracker-app:1.5.0` and `NGINX_IMAGE` to
-`ghcr.io/cosmicc/trip-tracker-nginx:1.5.0` through Portainer or the shell, and deploy the base
+`ghcr.io/cosmicc/trip-tracker-app:1.5.1` and `NGINX_IMAGE` to
+`ghcr.io/cosmicc/trip-tracker-nginx:1.5.1` through Portainer or the shell, and deploy the base
 stack for remote PostgreSQL. Add
 [docker-stack.local-postgres.yml](docker-stack.local-postgres.yml) only when the bundled
 PostgreSQL service should be part of the Swarm stack. In Swarm, configure the Cloudflare Tunnel
