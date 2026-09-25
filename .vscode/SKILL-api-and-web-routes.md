@@ -100,7 +100,10 @@ use the dedicated session factory so PostgreSQL failures can be translated into 
 Authenticate, decrypt, validate, verify Alembic migrations, and commit the raw payload before
 returning `200 []`. When PostgreSQL or migrations are unavailable, return `503 Service
 Unavailable` with `Retry-After: 30` and `Cache-Control: no-store`. Exact HTTP retries must reuse the
-existing raw event rather than inserting a duplicate. Do not add a server-side buffer or MQTT path.
+existing raw event rather than inserting a duplicate. Return immediately after the commit; never
+call or wait for automatic trip generation, odometer calculation, retention cleanup, or the trip
+processor lock in the HTTP request. The background `AutomaticTripProcessor` consumes committed rows
+on its next checkpointed pass. Do not add a server-side buffer or MQTT path.
 
 The `/api/health` endpoint is unauthenticated inside the app for container health checks;
 `/api/owntracks` requires authentication.

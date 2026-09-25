@@ -15,6 +15,9 @@ OwnTracks ingestion is HTTP-only. The endpoint commits raw messages directly to 
 returns `200 []` only after acceptance. When PostgreSQL or migrations are unavailable, it returns a
 retryable `503` so the OwnTracks mobile app retains and resends its own queue. Exact HTTP retries
 must not create duplicate raw rows. There is no server-side buffer, replay worker, or MQTT path.
+The HTTP request must not invoke or wait for trip processing or `_PROCESSING_LOCK`; the background
+`AutomaticTripProcessor` exclusively performs trip generation, odometer updates, backfills, and
+retention after ingestion has returned.
 
 ---
 

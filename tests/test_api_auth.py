@@ -16,7 +16,7 @@ from trip_tracker.api.routes import get_owntracks_session_factory
 from trip_tracker.app import app
 from trip_tracker.config import Settings
 from trip_tracker.database import get_db
-from trip_tracker.models import Base, OwnTracksLocation
+from trip_tracker.models import Base, OwnTracksLocation, Site
 
 
 def _test_client_session() -> tuple[TestClient, sessionmaker[Session]]:
@@ -70,6 +70,12 @@ def _encrypted_owntracks_payload(payload: dict, secret: str) -> dict:
         "_type": "encrypted",
         "data": base64.b64encode(bytes(encrypted)).decode("ascii"),
     }
+
+
+def _fail_if_trip_processing_runs(*args, **kwargs) -> None:
+    """Fail when the HTTP ingestion path invokes derived trip processing."""
+
+    raise AssertionError("HTTP ingestion must not invoke automatic trip processing")
 
 
 def test_owntracks_endpoint_requires_basic_auth_and_encrypted_payload(monkeypatch) -> None:
@@ -154,6 +160,11 @@ def test_owntracks_endpoint_uses_dedicated_database_session(monkeypatch) -> None
         automatic_trip_processing_enabled=False,
     )
     _patch_settings(monkeypatch, settings)
+    monkeypatch.setattr(
+        "trip_tracker.services.owntracks._run_trip_processing",
+        _fail_if_trip_processing_runs,
+        raising=False,
+    )
     client, session_factory = _test_client_session()
     payload = {
         "_type": "location",
@@ -172,10 +183,54 @@ def test_owntracks_endpoint_uses_dedicated_database_session(monkeypatch) -> None
         )
 
         assert response.status_code == 200
+        assert response.json() == []
         assert response.headers["Cache-Control"] == "no-store"
         assert "X-Trip-Tracker-OwnTracks-Buffered" not in response.headers
         with session_factory() as db:
             assert db.scalar(select(func.count(OwnTracksLocation.id))) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_owntracks_waypoint_endpoint_persists_without_trip_processing(monkeypatch) -> None:
+    settings = Settings(
+        database_url="sqlite://",
+        owntracks_username="owntracks",
+        owntracks_password="owntracks-password",
+        owntracks_encryption_key="owntracks-secret",
+        automatic_trip_processing_enabled=False,
+    )
+    _patch_settings(monkeypatch, settings)
+    monkeypatch.setattr(
+        "trip_tracker.services.owntracks._run_trip_processing",
+        _fail_if_trip_processing_runs,
+        raising=False,
+    )
+    client, session_factory = _test_client_session()
+    payload = {
+        "_type": "waypoint",
+        "desc": "Client Warehouse",
+        "lat": 42.3314,
+        "lon": -83.0458,
+        "rad": 75,
+        "rid": "warehouse-1",
+        "tst": int(datetime(2026, 6, 30, 12, 0, tzinfo=UTC).timestamp()),
+    }
+    encrypted_payload = _encrypted_owntracks_payload(payload, settings.owntracks_encryption_key)
+    try:
+        response = client.post(
+            "/api/owntracks",
+            json=encrypted_payload,
+            auth=("owntracks", "owntracks-password"),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+        with session_factory() as db:
+            site = db.scalar(select(Site).where(Site.owntracks_region_id == "warehouse-1"))
+            assert site is not None
+            assert site.name == "Client Warehouse"
+            assert site.radius_m == 75
     finally:
         app.dependency_overrides.clear()
 
@@ -299,6 +354,51 @@ def test_owntracks_exact_http_retry_is_not_stored_twice(monkeypatch) -> None:
         assert retry.status_code == 200
         with session_factory() as db:
             assert db.scalar(select(func.count(OwnTracksLocation.id))) == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_owntracks_sequential_backlog_persists_without_inline_processing(monkeypatch) -> None:
+    settings = Settings(
+        database_url="sqlite://",
+        owntracks_username="owntracks",
+        owntracks_password="owntracks-password",
+        owntracks_encryption_key="owntracks-secret",
+        automatic_trip_processing_enabled=False,
+    )
+    _patch_settings(monkeypatch, settings)
+    monkeypatch.setattr(
+        "trip_tracker.services.owntracks._run_trip_processing",
+        _fail_if_trip_processing_runs,
+        raising=False,
+    )
+    client, session_factory = _test_client_session()
+    first_timestamp = int(datetime(2026, 6, 30, 12, 0, tzinfo=UTC).timestamp())
+    try:
+        for offset in range(50):
+            encrypted_payload = _encrypted_owntracks_payload(
+                {
+                    "_type": "location",
+                    "lat": 42.3314 + (offset / 100_000),
+                    "lon": -83.0458,
+                    "tst": first_timestamp + offset,
+                    "tid": "IP",
+                    "topic": "owntracks/ian/phone",
+                },
+                settings.owntracks_encryption_key,
+            )
+
+            response = client.post(
+                "/api/owntracks",
+                json=encrypted_payload,
+                auth=("owntracks", "owntracks-password"),
+            )
+
+            assert response.status_code == 200
+            assert response.json() == []
+
+        with session_factory() as db:
+            assert db.scalar(select(func.count(OwnTracksLocation.id))) == 50
     finally:
         app.dependency_overrides.clear()
 

@@ -1,6 +1,23 @@
 # Changelog
 
-## 1.5.0 - Unreleased
+## 1.5.1 - 09.25.2026
+
+### Added
+- Added regression coverage proving encrypted location, waypoint, duplicate retry, and sequential
+  backlog requests persist successfully without invoking automatic trip processing in the HTTP
+  request.
+
+### Changed
+- Changed OwnTracks HTTP ingestion to return `200 []` immediately after PostgreSQL commits the
+  validated payload, leaving trip generation, odometer updates, backfills, and retention cleanup
+  to the existing background processor.
+- Bumped the Trip Tracker package and deployment image version to 1.5.1.
+
+### Fixed
+- Fixed OwnTracks Android requests timing out while waiting for the automatic trip processor or
+  its global lock, which caused retried messages to block the phone's queued location updates.
+
+## 1.5.0 - 07.27.2026
 
 ### Added
 - Added a focused 1.5.0 upgrade guide covering the coordinated database, PostgreSQL role, Docker

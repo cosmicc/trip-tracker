@@ -3,7 +3,7 @@ import binascii
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from nacl.exceptions import CryptoError
@@ -13,8 +13,6 @@ from sqlalchemy.orm import Session
 
 from trip_tracker.config import Settings, get_settings
 from trip_tracker.models import OwnTracksLocation, Site
-from trip_tracker.services.timezone import datetime_to_local_date
-from trip_tracker.services.trip_processor import run_automatic_trip_processing
 
 logger = logging.getLogger(__name__)
 
@@ -263,23 +261,6 @@ def _site_radius_from_payload(payload: dict) -> int:
         return settings.owntracks_default_site_radius_m
 
 
-def _payload_date(payload: dict) -> date:
-    return datetime_to_local_date(_payload_datetime(payload))
-
-
-def _run_trip_processing(db: Session, payload: dict) -> None:
-    touched_date = _payload_date(payload)
-    finalize_completed_days = touched_date >= datetime_to_local_date(datetime.now(UTC))
-    try:
-        run_automatic_trip_processing(
-            db,
-            touched_date=touched_date,
-            finalize_completed_days=finalize_completed_days,
-        )
-    except Exception:
-        logger.exception("Automatic trip processing failed after OwnTracks payload")
-
-
 def sync_site_from_owntracks_payload(
     db: Session,
     payload: dict,
@@ -466,7 +447,12 @@ def process_owntracks_payload(
     user: str | None = None,
     device: str | None = None,
 ) -> OwnTracksProcessResult:
-    """Persist one validated HTTP payload and run best-effort trip processing."""
+    """Persist one validated HTTP payload without waiting for derived trip processing.
+
+    Automatic trip generation, odometer updates, and retention are owned by the
+    background ``AutomaticTripProcessor``. Keeping those operations outside this
+    function lets the HTTP route acknowledge a committed OwnTracks message promptly.
+    """
 
     payload = _decode_payload(body)
     payload_type = payload.get("_type")
@@ -477,10 +463,8 @@ def process_owntracks_payload(
         db.commit()
         if site is not None:
             db.refresh(site)
-        _run_trip_processing(db, payload)
         return OwnTracksProcessResult(location=None, site=site)
 
     message = _location_message_from_payload(payload, topic=topic, user=user, device=device)
     location = store_owntracks_location(db, message)
-    _run_trip_processing(db, payload)
     return OwnTracksProcessResult(location=location, site=None)

@@ -1364,7 +1364,7 @@ def test_install_assets_stay_available_when_web_login_is_enabled(monkeypatch) ->
         assert manifest["scope"] == "/"
         assert manifest_response.headers["cache-control"] == "no-store"
         assert {icon["purpose"] for icon in manifest["icons"]} == {"any", "maskable"}
-        assert "/static/icons/trip-tracker-icon-512.png?v=1.5.0-brand1" in {
+        assert "/static/icons/trip-tracker-icon-512.png?v=1.5.1-brand1" in {
             icon["src"] for icon in manifest["icons"]
         }
 
