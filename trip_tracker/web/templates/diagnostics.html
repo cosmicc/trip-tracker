@@ -965,6 +965,11 @@ Showing {{ pagination.first_item }}-{{ pagination.last_item }} of {{ pagination.
         if (!verifyResponse.ok) {
           throw new Error(result.error || "Passkey creation failed.");
         }
+        try {
+          localStorage.setItem("trip_tracker.passkey_browser", "true");
+        } catch {
+          // Registration succeeds even when browser site storage is unavailable.
+        }
         window.location.assign("/diagnostics#passkeys");
       } catch (error) {
         showStatus(error.message || "Passkey creation failed.", true);

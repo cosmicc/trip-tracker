@@ -70,13 +70,18 @@
         const publicDeviceCheckbox = document.getElementById("public-device-checkbox");
         const publicDeviceMessage = document.getElementById("passkey-public-device-message");
         const nextUrl = button.dataset.nextUrl || "/";
+        // This preference only starts a ceremony; the server still verifies the passkey.
+        const passkeyBrowserKey = "trip_tracker.passkey_browser";
+        let activeAttempt = null;
+        let passwordSubmitted = false;
 
         const updatePasskeyAvailability = () => {
           const publicDevice = publicDeviceCheckbox.checked;
-          button.disabled = publicDevice;
+          button.disabled = publicDevice || activeAttempt !== null;
           button.setAttribute("aria-disabled", publicDevice ? "true" : "false");
           publicDeviceMessage.hidden = !publicDevice;
           if (publicDevice) {
+            activeAttempt?.abort();
             errorMessage.hidden = true;
           }
         };
@@ -135,15 +140,18 @@
           return json;
         };
 
-        const signInWithPasskey = async () => {
-          if (publicDeviceCheckbox.checked) {
+        const signInWithPasskey = async (automatic = false) => {
+          if (publicDeviceCheckbox.checked || activeAttempt || passwordSubmitted) {
             return;
           }
           errorMessage.hidden = true;
+          const attempt = new AbortController();
+          activeAttempt = attempt;
           button.disabled = true;
           try {
             const optionsResponse = await fetch("/passkeys/login/options", {
               method: "POST",
+              signal: attempt.signal,
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 next_url: nextUrl,
@@ -154,9 +162,12 @@
               throw new Error("Device sign-in is unavailable.");
             }
             const publicKey = prepareAuthenticationOptions(await optionsResponse.json());
-            const credential = await navigator.credentials.get({ publicKey });
+            if (attempt.signal.aborted) return;
+            const credential = await navigator.credentials.get({ publicKey, signal: attempt.signal });
+            if (!credential || attempt.signal.aborted || publicDeviceCheckbox.checked || passwordSubmitted) return;
             const verifyResponse = await fetch("/passkeys/login/verify", {
               method: "POST",
+              signal: attempt.signal,
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 ...credentialToJson(credential),
@@ -168,10 +179,20 @@
             if (!verifyResponse.ok) {
               throw new Error(result.error || "Device sign-in failed.");
             }
+            if (attempt.signal.aborted || publicDeviceCheckbox.checked || passwordSubmitted) return;
+            try {
+              localStorage.setItem(passkeyBrowserKey, "true");
+            } catch {
+              // Storage restrictions must never prevent successful authentication.
+            }
             window.location.assign(result.redirect_url || "/");
           } catch (error) {
-            showError(error.message || "Device sign-in failed.");
+            // An automatic cancellation/failure leaves the password form undisturbed.
+            if (!automatic && !attempt.signal.aborted) {
+              showError(error.message || "Device sign-in failed.");
+            }
           } finally {
+            activeAttempt = null;
             updatePasskeyAvailability();
           }
         };
@@ -183,7 +204,22 @@
         }
         publicDeviceCheckbox.addEventListener("change", updatePasskeyAvailability);
         updatePasskeyAvailability();
-        button.addEventListener("click", signInWithPasskey);
+        button.addEventListener("click", () => signInWithPasskey());
+        document.querySelector(".login-form").addEventListener("submit", () => {
+          passwordSubmitted = true;
+          activeAttempt?.abort();
+        });
+        // Attempt once per page load on recognized browsers, regardless of device type.
+        // Browsers with synced keys become recognized after their first manual sign-in.
+        let recognizedBrowser = false;
+        try {
+          recognizedBrowser = localStorage.getItem(passkeyBrowserKey) === "true";
+        } catch {
+          // Keep manual sign-in available when site storage is blocked.
+        }
+        if (recognizedBrowser) {
+          void signInWithPasskey(true);
+        }
       })();
     </script>
     {% endif %}

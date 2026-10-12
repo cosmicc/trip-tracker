@@ -40,5 +40,10 @@ jobs:
           docker stack config -c docker-stack.yml
           export DATABASE_URL=postgresql+psycopg://triptracker:triptracker@postgres:5432/trip_tracker
           docker stack config -c docker-stack.yml -c docker-stack.local-postgres.yml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test passkey login script
+        run: node tests/passkey-login.test.cjs
       - name: Test
         run: pytest

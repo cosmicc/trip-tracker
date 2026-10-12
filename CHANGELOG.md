@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.2 - 10.12.2026
+
+### Added
+- Added automatic Device Sign-In attempts on desktop and mobile browsers that previously
+  registered or successfully used a passkey, with browser-script regression checks.
+
+### Changed
+- Updated the application version and deployment image examples to 1.5.2.
+- Remember passkey browsers using a non-secret local preference; device or password-manager
+  approval and server-side passkey verification remain required.
+
+### Fixed
+- Keep normal login available after automatic passkey cancellation or failure, and cancel pending
+  attempts when selecting public-device mode or submitting password login.
+
 ## 1.5.1 - 09.25.2026
 
 ### Added

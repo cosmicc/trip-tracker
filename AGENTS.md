@@ -129,6 +129,13 @@ backward-compatibility handling.
   limited to login challenge generation and assertion verification
 - Failed passkey assertions use the same audit log, temporary lockout, and Cloudflare auto-block
   path as failed password logins
+- Successful registration and sign-in set the non-secret browser-local preference
+  `trip_tracker.passkey_browser`. Recognized desktop and mobile browsers attempt Device Sign-In
+  once per login-page load. The marker never authenticates a user; server assertion verification
+  remains mandatory. Automatic failures stay quiet, public-device selection and password submit
+  abort pending attempts, and blocked storage must preserve manual login.
+- Run `node --test tests/passkey-login.test.cjs` for login-script behavior checks alongside the
+  Python passkey/web tests. CI runs these script checks with Node.js 20.
 
 **[cloudflare_blocks.py](trip_tracker/services/cloudflare_blocks.py)** — Cloudflare IP blocking
 - Creates and deletes app-managed Cloudflare zone IP Access Rules for failed-login and manually
