@@ -5,7 +5,7 @@ stores them in PostgreSQL, lets you review and edit generated waypoint work trip
 monthly mileage and expense PDF logs.
 
 Upgrading an existing deployment from 1.4.4 or earlier requires coordinated database, storage,
-service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.1.
+service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.2.
 
 ## Current Scope
 
@@ -143,8 +143,8 @@ Docker Swarm deployments use [docker-stack.yml](docker-stack.yml) instead of `do
 Swarm cannot build images, use Compose profiles, or keep the normal Compose loopback-only port
 binding. The `Build and publish Swarm images` GitHub workflow publishes versioned, `latest`, and
 commit-SHA app and nginx images to GHCR. Set `APP_IMAGE` to
-`ghcr.io/cosmicc/trip-tracker-app:1.5.1` and `NGINX_IMAGE` to
-`ghcr.io/cosmicc/trip-tracker-nginx:1.5.1` through Portainer or the shell, and deploy the base
+`ghcr.io/cosmicc/trip-tracker-app:1.5.2` and `NGINX_IMAGE` to
+`ghcr.io/cosmicc/trip-tracker-nginx:1.5.2` through Portainer or the shell, and deploy the base
 stack for remote PostgreSQL. Add
 [docker-stack.local-postgres.yml](docker-stack.local-postgres.yml) only when the bundled
 PostgreSQL service should be part of the Swarm stack. In Swarm, configure the Cloudflare Tunnel
@@ -246,7 +246,12 @@ public-device option to see this explanation on the login page.
 
 Diagnostics includes a Configure Passkey card for the single configured web-login user. Sign in
 with the normal username/password once, create a passkey from Diagnostics, then use Device Sign-In
-on the login page. Passkeys require a secure browser origin; when the app is published through
+on the login page. After successful registration or Device Sign-In, that browser remembers to
+start one passkey sign-in attempt automatically on future login-page visits, on desktop and mobile.
+Your device or password manager still asks for approval. Canceling or failing keeps the normal
+login available. New browsers (including browsers with an existing synced key) need one manual
+Device Sign-In first; clearing or blocking site storage removes automatic sign-in recognition.
+Public-device mode disables automatic attempts too. Passkeys require a secure browser origin; when the app is published through
 Cloudflare Tunnel, the default Docker web service config forwards the public HTTPS origin. If your proxy
 setup is unusual, set `PASSKEY_ORIGIN=https://your-host.example.com` and
 `PASSKEY_RP_ID=your-host.example.com` explicitly.

@@ -505,6 +505,12 @@ Password or Passkey method pill instead of an account column.
 Failed passkey assertions must use the same failed-login audit, lockout, and Cloudflare auto-block
 path as invalid passwords; use password length `0` and a passkey-specific reason such as
 `invalid_passkey`. Do not expose passkey registration without an authenticated Diagnostics session.
+The browser-local `trip_tracker.passkey_browser` preference is set only after verified passkey
+registration or login. It triggers one automatic login attempt per page load on any device type;
+it is only a UI preference and never an authentication credential. Keep manual login usable when
+storage is blocked, automatic attempts fail, or the user cancels. Abort pending browser ceremonies
+when public-device mode is selected or the password form submits, and prevent concurrent ceremonies.
+Use `node --test tests/passkey-login.test.cjs` to verify these browser-script behaviors.
 The app has one configured web user, so passkeys are stored for `WEB_LOGIN_USERNAME` in
 `passkey_credentials` rather than adding separate user-management flows.
 `WEB_LOGIN_USERNAME` and `WEB_LOGIN_PASSWORD` must be set together. When web login is enabled,
