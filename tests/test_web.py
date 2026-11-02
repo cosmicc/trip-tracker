@@ -5311,14 +5311,9 @@ def test_diagnostics_manual_odometer_card_shows_current_odometer() -> None:
     assert "drive-space-track" in rendered
     assert 'style="width: 62.0%"' in rendered
     disk_details_start = rendered.index('<dl class="diagnostic-list">', hard_drive_start)
-    database_summary_start = rendered.index('<div class="database-summary">')
-    assert hard_drive_start < disk_details_start < database_summary_start < state_log_start
-    database_summary = rendered[database_summary_start:state_log_start]
-    assert "Database Data" in database_summary
-    assert "Database Size" in database_summary
-    assert "128.0 KB" in database_summary
-    assert "Total Records" in database_summary
-    assert "42 records" in database_summary
+    assert hard_drive_start < disk_details_start < state_log_start
+    assert "Database Data" not in rendered
+    assert 'class="database-summary"' not in rendered
 
     backup_start = rendered.index('<section id="data-backup" class="panel">')
     cloudflare_start = rendered.index('<section id="cloudflare-blocked-ips" class="panel">')
@@ -5543,3 +5538,84 @@ def test_aaa_gas_provider_uses_local_observed_date(monkeypatch) -> None:
     reading = AaaMichiganGasPriceProvider().current_regular_price("MI")
 
     assert reading.observed_on == now.date()
+
+
+
+def test_monthly_report_submission_download_lock_and_reopen(monkeypatch) -> None:
+    """Verify the complete browser workflow and server-side expense protection."""
+    from trip_tracker.models import MonthlyReportStatus
+
+    monkeypatch.setattr(
+        "trip_tracker.services.report_status.local_today", lambda: date(2026, 11, 1)
+    )
+    client, session_factory = _test_client_session()
+    try:
+        with session_factory() as db:
+            db.add(
+                MonthlyGasPrice(
+                    year=2026,
+                    month=10,
+                    state="MI",
+                    average_price_per_gallon=Decimal("3.50"),
+                    buffer_per_gallon=Decimal("0"),
+                    effective_rate=Decimal("3.50"),
+                    source="manual",
+                    source_detail="test",
+                )
+            )
+            db.commit()
+        endpoint = "/reports/2026/10/submission"
+        response = client.post(endpoint, data={"submitted": "true"}, follow_redirects=False)
+        assert response.status_code == 409
+        pdf = client.post("/reports/2026/10")
+        assert pdf.status_code == 200
+        assert pdf.content.startswith(b"%PDF")
+        assert pdf.headers["cache-control"] == "no-store"
+        content = client.get("/trips/content?year=2026&month=10")
+        assert "PDF downloaded. Ready to mark submitted" in content.text
+        response = client.post(endpoint, data={"submitted": "true"}, follow_redirects=False)
+        assert response.status_code == 303
+        content = client.get("/trips/content?year=2026&month=10")
+        assert "Submitted for reimbursement on" in content.text
+        assert "Mark Unsubmitted" in content.text
+        blocked = client.post(
+            "/trips/report-expenses/add",
+            data={
+                "expense_date": "2026-10-20",
+                "expense_reason": "Parking",
+                "expense_amount": "5.00",
+            },
+        )
+        assert blocked.status_code == 409
+        assert (
+            client.post(endpoint, data={"submitted": "false"}, follow_redirects=False).status_code
+            == 303
+        )
+        assert (
+            client.post(endpoint, data={"submitted": "true"}, follow_redirects=False).status_code
+            == 409
+        )
+        with session_factory() as db:
+            status = db.scalar(select(MonthlyReportStatus))
+            assert status.submitted_at is None
+            assert status.downloaded_at is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_failed_pdf_does_not_enable_submission(monkeypatch) -> None:
+    """Failed PDF generation creates no download evidence."""
+    from trip_tracker.models import MonthlyReportStatus
+    from trip_tracker.services.gas_prices import GasPriceUnavailable
+
+    def unavailable(*_args, **_kwargs):
+        raise GasPriceUnavailable("No monthly price")
+
+    monkeypatch.setattr("trip_tracker.web.routes.get_or_create_monthly_price", unavailable)
+    client, session_factory = _test_client_session()
+    try:
+        assert client.post("/reports/2026/10").status_code == 400
+        with session_factory() as db:
+            assert db.scalar(select(MonthlyReportStatus)) is None
+    finally:
+        app.dependency_overrides.clear()

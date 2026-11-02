@@ -341,3 +341,8 @@ See [tests/](tests/) for examples of database-dependent tests.
 - [SQLAlchemy Column Types](https://docs.sqlalchemy.org/en/20/core/types.html)
 - [Existing migrations](alembic/versions/) as reference
 - [models.py](trip_tracker/models.py) for field definitions
+
+## Monthly report protection
+
+Follow [SKILL-monthly-reports.md](SKILL-monthly-reports.md) for PDF evidence, submission locks,
+concurrent writes, submitted-month maintenance rules, and backup compatibility.

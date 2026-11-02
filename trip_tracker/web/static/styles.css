@@ -671,6 +671,10 @@ p {
   background: linear-gradient(90deg, var(--line-strong), var(--muted));
 }
 
+.report-submission-status {
+  margin: 0 0 12px;
+}
+
 .trips-summary-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

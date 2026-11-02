@@ -109,6 +109,14 @@ from trip_tracker.services.pdf import (
     extra_expense_total,
     generate_monthly_pdf,
 )
+from trip_tracker.services.report_status import (
+    lock_report_writes,
+    record_report_download,
+    report_fingerprint,
+    report_status,
+    require_month_editable,
+    set_report_submitted,
+)
 from trip_tracker.services.runtime_status import build_runtime_status
 from trip_tracker.services.timezone import (
     datetime_to_local,
@@ -726,7 +734,20 @@ def _trips_template_context(db: Session, *, year: int, month: int) -> dict[str, 
             .order_by(DeletedTrip.trip_date.asc(), DeletedTrip.started_at.asc())
         )
     )
+    status = report_status(db, year, month)
+    submitted = status is not None and status.submitted_at is not None
+    month_complete = start < local_today().replace(day=1)
+    downloaded = (
+        status is not None
+        and status.downloaded_at is not None
+        and status.download_fingerprint == report_fingerprint(db, year, month)
+    )
     return {
+        "report_submitted": submitted,
+        "report_submitted_at": status.submitted_at if submitted else None,
+        "report_can_submit": month_complete and downloaded,
+        "report_month_complete": month_complete,
+        "report_downloaded": downloaded,
         "trips": all_trips,
         "year": year,
         "month": month,
@@ -1949,6 +1970,7 @@ def update_trip_form(
     trip = db.get(Trip, trip_id)
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
+    require_month_editable(db, trip.trip_date.year, trip.trip_date.month)
     if miles < 0:
         raise HTTPException(status_code=400, detail="Miles must be zero or greater")
     origin_site = _load_trip_form_waypoint(db, origin_site_id)
@@ -1960,13 +1982,11 @@ def update_trip_form(
         destination_site=destination_site,
         miles=miles,
     )
-    adjusted_trip_count = (
-        resequence_month_trip_odometers_from(db, trip) if distance_changed else 0
-    )
+    adjusted_trip_count = resequence_month_trip_odometers_from(db, trip) if distance_changed else 0
     db.commit()
     logger.info(
         "Updated trip via web form trip_id=%s date=%s origin=%s destination=%s miles=%s "
-        "adjusted_same_month_trips=%s",
+        "adjusted_future_trips=%s",
         trip.id,
         trip.trip_date.isoformat(),
         trip.origin_display_name,
@@ -1988,6 +2008,7 @@ def create_trip_form(
     miles: Decimal = Form(...),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    require_month_editable(db, trip_date.year, trip_date.month)
     if miles < 0:
         raise HTTPException(status_code=400, detail="Miles must be zero or greater")
     origin_site = _load_trip_form_waypoint(db, origin_site_id)
@@ -2023,6 +2044,7 @@ def create_monthly_report_expense_form(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     expense_year, expense_month = _expense_report_month(expense_date)
+    require_month_editable(db, expense_year, expense_month)
     existing_count = _monthly_report_expense_count(
         db,
         year=expense_year,
@@ -2067,6 +2089,7 @@ def delete_monthly_report_expense_form(
     if expense is None:
         raise HTTPException(status_code=404, detail="Monthly report expense not found")
 
+    require_month_editable(db, expense.year, expense.month)
     logger.info(
         "Deleted monthly report expense expense_id=%s date=%s amount=%s",
         expense.id,
@@ -2087,6 +2110,7 @@ def delete_trip_form(trip_id: int, db: Session = Depends(get_db)) -> RedirectRes
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
 
+    require_month_editable(db, trip.trip_date.year, trip.trip_date.month)
     redirect_year = trip.trip_date.year
     redirect_month = trip.trip_date.month
     deleted_trip = delete_trip(db, trip)
@@ -3035,14 +3059,34 @@ def test_eia_api() -> RedirectResponse:
     )
 
 
+@router.post("/reports/{year}/{month}/submission")
+def report_submission_form(
+    year: int,
+    month: int,
+    submitted: bool = Form(...),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Record employer submission or explicitly unlock a previously submitted report."""
+    _validate_month(month)
+    if not 2000 <= year <= 2100:
+        raise HTTPException(400, "Report year must be between 2000 and 2100")
+    set_report_submitted(db, year, month, submitted)
+    return RedirectResponse(f"/trips?year={year}&month={month}", status_code=303)
+
+
 @router.post("/reports/{year}/{month}")
 def report_form(year: int, month: int, db: Session = Depends(get_db)) -> Response:
     _validate_month(month)
+    if not 2000 <= year <= 2100:
+        raise HTTPException(400, "Report year must be between 2000 and 2100")
     try:
+        get_or_create_monthly_price(db, year, month)
+        lock_report_writes(db)
         report = generate_monthly_pdf(db, year, month)
     except GasPriceUnavailable as exc:
         logger.warning("Report generation unavailable year=%s month=%s error=%s", year, month, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_report_download(db, year, month)
     logger.info(
         "Generated report from web form year=%s month=%s filename=%s",
         year,
@@ -3052,5 +3096,8 @@ def report_form(year: int, month: int, db: Session = Depends(get_db)) -> Respons
     return Response(
         content=report.content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{report.filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{report.filename}"',
+            "Cache-Control": "no-store",
+        },
     )

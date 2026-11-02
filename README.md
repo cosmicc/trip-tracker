@@ -5,7 +5,7 @@ stores them in PostgreSQL, lets you review and edit generated waypoint work trip
 monthly mileage and expense PDF logs.
 
 Upgrading an existing deployment from 1.4.4 or earlier requires coordinated database, storage,
-service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.2.
+service, and image-name changes. Follow [UPGRADE-1.5.md](UPGRADE-1.5.md) before deploying 1.5.3.
 
 ## Current Scope
 
@@ -143,8 +143,8 @@ Docker Swarm deployments use [docker-stack.yml](docker-stack.yml) instead of `do
 Swarm cannot build images, use Compose profiles, or keep the normal Compose loopback-only port
 binding. The `Build and publish Swarm images` GitHub workflow publishes versioned, `latest`, and
 commit-SHA app and nginx images to GHCR. Set `APP_IMAGE` to
-`ghcr.io/cosmicc/trip-tracker-app:1.5.2` and `NGINX_IMAGE` to
-`ghcr.io/cosmicc/trip-tracker-nginx:1.5.2` through Portainer or the shell, and deploy the base
+`ghcr.io/cosmicc/trip-tracker-app:1.5.3` and `NGINX_IMAGE` to
+`ghcr.io/cosmicc/trip-tracker-nginx:1.5.3` through Portainer or the shell, and deploy the base
 stack for remote PostgreSQL. Add
 [docker-stack.local-postgres.yml](docker-stack.local-postgres.yml) only when the bundled
 PostgreSQL service should be part of the Swarm stack. In Swarm, configure the Cloudflare Tunnel
@@ -646,3 +646,19 @@ CLOUDFLARED_TUNNEL_TOKEN=dummy-token docker compose --env-file .env.docker.examp
 docker compose run --rm ttapp alembic revision --autogenerate -m "message"
 docker compose run --rm ttapp alembic upgrade head
 ```
+
+### Monthly reimbursement submission
+
+On **Work Trips**, select the report month and download its PDF. After the month ends and you
+send the report to your employer, select **Mark Submitted for Reimbursement**. The selected month
+shows its submission date and stays locked until you select **Mark Unsubmitted**. Reopening a
+month or changing report data requires a fresh PDF before submitting again. The app records PDF
+responses; it cannot verify that your browser saved the file or that your employer received it.
+
+Mileage edits preserve each trip's mileage and existing non-trip odometer gaps while adjusting
+later trip odometers across months. If an adjustment reaches a submitted month, reopen that month
+first. Deleting a trip leaves every other trip's odometers unchanged.
+
+Version 1.5.3 adds a report-status table through the automatic startup migration. The background
+processor repairs existing overlapping odometers on its next pass without changing trip mileage
+or the rolling OwnTracks odometer. Back up your data before upgrading.

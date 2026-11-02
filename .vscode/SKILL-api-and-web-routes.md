@@ -871,3 +871,8 @@ See [tests/test_web.py](tests/test_web.py) for examples of testing:
 - [web/routes.py](trip_tracker/web/routes.py) — Existing web routes
 - [web/templates/](trip_tracker/web/templates/) — Template examples
 - [schemas.py](trip_tracker/schemas.py) — Request/response models
+
+## Monthly report protection
+
+Follow [SKILL-monthly-reports.md](SKILL-monthly-reports.md) for PDF evidence, submission locks,
+concurrent writes, submitted-month maintenance rules, and backup compatibility.

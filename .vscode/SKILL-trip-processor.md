@@ -302,3 +302,8 @@ Key test patterns:
 - **Lock**: Single thread processing to prevent concurrent modification conflicts
 
 See [trip_processor.py](trip_tracker/services/trip_processor.py#L1) `_PROCESSING_LOCK` for concurrency guard.
+
+## Monthly report protection
+
+Follow [SKILL-monthly-reports.md](SKILL-monthly-reports.md) for PDF evidence, submission locks,
+concurrent writes, submitted-month maintenance rules, and backup compatibility.

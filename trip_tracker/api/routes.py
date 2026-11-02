@@ -14,6 +14,7 @@ from trip_tracker.schemas import MonthlyGasPriceCreate, TripUpdate, WaypointRead
 from trip_tracker.services.gas_prices import (
     GasPriceUnavailable,
     fetch_and_save_current_snapshot,
+    get_or_create_monthly_price,
     upsert_manual_monthly_price,
 )
 from trip_tracker.services.mileage import (
@@ -30,6 +31,11 @@ from trip_tracker.services.owntracks import (
     validate_owntracks_payload_for_ingest,
 )
 from trip_tracker.services.pdf import generate_monthly_pdf
+from trip_tracker.services.report_status import (
+    lock_report_writes,
+    record_report_download,
+    require_month_editable,
+)
 from trip_tracker.services.timezone import datetime_to_local
 from trip_tracker.services.waypoints import owntracks_waypoints_json
 
@@ -163,6 +169,9 @@ def update_trip(trip_id: int, update: TripUpdate, db: Session = Depends(get_db))
     trip = db.get(Trip, trip_id)
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
+    require_month_editable(db, trip.trip_date.year, trip.trip_date.month)
+    if update.trip_date is not None:
+        require_month_editable(db, update.trip_date.year, update.trip_date.month)
     original_miles = trip.miles
     update_trip_details(
         trip,
@@ -223,11 +232,16 @@ def manual_monthly_gas_price(
 def generate_report(year: int, month: int, db: Session = Depends(get_db)) -> Response:
     if month < 1 or month > 12:
         raise HTTPException(status_code=400, detail="month must be 1 through 12")
+    if not 2000 <= year <= 2100:
+        raise HTTPException(400, "Report year must be between 2000 and 2100")
     try:
+        get_or_create_monthly_price(db, year, month)
+        lock_report_writes(db)
         report = generate_monthly_pdf(db, year, month)
     except GasPriceUnavailable as exc:
         logger.warning("Report generation unavailable year=%s month=%s error=%s", year, month, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_report_download(db, year, month)
     logger.info(
         "Generated report via API year=%s month=%s filename=%s",
         year,
@@ -237,5 +251,8 @@ def generate_report(year: int, month: int, db: Session = Depends(get_db)) -> Res
     return Response(
         content=report.content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{report.filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{report.filename}"',
+            "Cache-Control": "no-store",
+        },
     )

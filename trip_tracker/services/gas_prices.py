@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from trip_tracker import database
 from trip_tracker.config import Settings, get_settings
 from trip_tracker.models import GasPriceSnapshot, MonthlyGasPrice
+from trip_tracker.services.report_status import require_month_editable
 from trip_tracker.services.timezone import local_today
 
 logger = logging.getLogger(__name__)
@@ -169,6 +170,7 @@ def upsert_monthly_price(
     source: str,
     source_detail: str,
 ) -> MonthlyGasPrice:
+    require_month_editable(db, year, month)
     state = state.upper()
     effective_rate = (average_price_per_gallon + buffer_per_gallon).quantize(Decimal("0.001"))
     stmt = (

@@ -153,7 +153,9 @@ def generate_trips(
      If the only available master checkpoint is later than the trip start, estimate the start from
      retained OwnTracks path rows between the trip start and that checkpoint. Do not fill from a
      later checkpoint when the needed path rows are no longer retained.
-     Do not fall back to the previous trip end odometer for generated trip starts.
+     Do not use the previous trip end as the OwnTracks calculation source. Before commit,
+     the continuity repair floors an overlapping display start at the preceding trip end,
+     derives its display end from saved miles, and leaves the master checkpoint unchanged.
    - Calculate the end odometer from the chosen start odometer plus the selected trip distance
    - Create Trip record
 
@@ -279,8 +281,9 @@ Effects:
 - Sets `mileage_source="manual"`
 - Preserves the trip's creation `source`; an automatic trip with edited mileage remains an
   automatic trip and receives the purple edited-row tint on the Trips page
-- Recalculates only the edited trip and later trips in the same start month. The edited trip keeps
-  its existing start odometer; earlier trips and other months remain untouched.
+- Recalculates the edited trip and later trips across months. Clamp the edited start to the
+  previous trip end if it overlaps; preserve existing positive gaps and stored mileage. Earlier
+  trips remain untouched. Submitted affected months must first be unsubmitted.
 
 On the Trips page, existing row dates and odometers remain read-only. From/To edits are validated
 waypoint dropdown selections; changing them stores the selected waypoint IDs, names, and
@@ -289,20 +292,20 @@ miles value still drives odometer resequencing.
 
 ### Resequencing Logic
 
-When trip miles change, recalculate from that trip forward through the same start month only:
+When trip miles change, recalculate from that trip forward across months:
 
 ```python
 resequence_month_trip_odometers_from(db, trip)
 ```
 
-When a manual trip is newly inserted, use the broader forward resequence:
+When a manual trip is newly inserted, use the shared forward resequence:
 
 ```python
 resequence_trip_odometers_from(db, trip)
 ```
 
 This ensures:
-1. The edited trip and same-month later rows are chronologically ordered
+1. The edited trip and later rows across months are chronologically ordered
 2. Manual trip start odometer comes from the current rolling checkpoint when available
 3. Existing positive gaps between a previous end odometer and the next start odometer are reapplied
 4. End odometer = start odometer + trip miles
@@ -523,3 +526,8 @@ def test_trip_mileage_fallback_to_waypoint_distance():
 - [trip_processor.py](trip_tracker/services/trip_processor.py) — Checkpoint management
 - [models.py](trip_tracker/models.py) — Trip, Site, TripProcessingCheckpoint models
 - [README.md](README.md#Trip-Detection) — Trip generation overview
+
+## Monthly report protection
+
+Follow [SKILL-monthly-reports.md](SKILL-monthly-reports.md) for PDF evidence, submission locks,
+concurrent writes, submitted-month maintenance rules, and backup compatibility.
