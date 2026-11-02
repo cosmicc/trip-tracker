@@ -422,3 +422,17 @@ class PasskeyCredential(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+
+class MonthlyReportStatus(Base):
+    """Persistent PDF download evidence and reimbursement submission state."""
+
+    __tablename__ = "monthly_report_statuses"
+    __table_args__ = (UniqueConstraint("year", "month", name="uq_report_status_month"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int] = mapped_column(Integer)
+    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    download_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1506,7 +1506,7 @@ def test_emergency_rebuild_discards_unrecoverable_large_and_excess_smaller_gaps(
     assert trips[-1].end_odometer_miles == Decimal("50.0")
 
 
-def test_edit_resequence_changes_only_edited_and_later_trips_in_same_month() -> None:
+def test_edit_resequence_changes_edited_and_later_trips_across_months() -> None:
     db = _session()
     starts = [
         datetime(2026, 6, 10, 13, 0, tzinfo=UTC),
@@ -1539,15 +1539,15 @@ def test_edit_resequence_changes_only_edited_and_later_trips_in_same_month() -> 
     adjusted_count = resequence_month_trip_odometers_from(db, trips[1])
     db.commit()
 
-    assert adjusted_count == 2
+    assert adjusted_count == 3
     assert trips[0].start_odometer_miles == Decimal("1000.0")
     assert trips[0].end_odometer_miles == Decimal("1005.0")
     assert trips[1].start_odometer_miles == Decimal("1005.0")
     assert trips[1].end_odometer_miles == Decimal("1013.0")
     assert trips[2].start_odometer_miles == Decimal("1013.0")
     assert trips[2].end_odometer_miles == Decimal("1018.0")
-    assert trips[3].start_odometer_miles == Decimal("1015.0")
-    assert trips[3].end_odometer_miles == Decimal("1020.0")
+    assert trips[3].start_odometer_miles == Decimal("1018.0")
+    assert trips[3].end_odometer_miles == Decimal("1023.0")
 
 
 def test_generate_trips_estimates_transition_only_trip_from_checkpoint() -> None:
@@ -1667,7 +1667,7 @@ def test_generate_trips_does_not_estimate_odometer_from_prior_trip_end() -> None
     assert trips[0].end_odometer_source is None
 
 
-def test_generate_trips_does_not_carry_previous_generated_trip_end_to_next_start() -> None:
+def test_generate_trips_repairs_repeated_checkpoint_starts_without_changing_master() -> None:
     db = _session()
     day = datetime(2026, 6, 11, 13, 0, tzinfo=UTC)
     home = _site("Home", "42.3314", "-83.0458")
@@ -1705,8 +1705,11 @@ def test_generate_trips_does_not_carry_previous_generated_trip_end_to_next_start
     assert trips[0].end_odometer_miles == (Decimal("1000.0") + first_distance).quantize(
         Decimal("0.1")
     )
-    assert trips[1].start_odometer_miles == Decimal("1000.0")
-    assert trips[1].start_odometer_source == ODOMETER_SOURCE_OWNTRACKS_ROLLING
+    assert trips[1].start_odometer_miles == trips[0].end_odometer_miles
+    assert trips[1].start_odometer_source == ODOMETER_SOURCE_ESTIMATED
+    assert trips[1].end_odometer_miles == trips[1].start_odometer_miles + trips[1].miles
+    checkpoint = db.scalar(select(TripProcessingCheckpoint))
+    assert checkpoint.odometer_anchor_miles == Decimal("1000.0")
 
 
 def test_manual_trip_does_not_modify_master_odometer() -> None:

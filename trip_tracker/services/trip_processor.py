@@ -20,6 +20,7 @@ from trip_tracker.services.mileage import (
     backfill_missing_trip_odometers,
     generate_trips,
     owntracks_segment_miles,
+    repair_overlapping_trip_odometers,
     resequence_all_trip_odometers_to_manual_reading,
     site_indexes,
 )
@@ -326,6 +327,7 @@ def run_automatic_trip_processing(
             generated += _generate_for_date(db, day, processed_dates, as_of=current_dt)
 
         repaired_trip_count = backfill_missing_trip_odometers(db)
+        repaired_trip_count += repair_overlapping_trip_odometers(db)
         if repaired_trip_count:
             db.commit()
 

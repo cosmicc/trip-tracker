@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.3 - 11.01.2026
+
+### Added
+- Added monthly reimbursement submission tracking after the month ends and a current PDF is downloaded.
+- Added submitted-month locks and an explicit Mark Unsubmitted action to reopen report data.
+
+### Changed
+- Mileage edits now check the preceding trip and adjust later odometers across month boundaries, preserving trip mileage and positive non-trip gaps. Changes affecting a submitted month require that month to be unsubmitted first.
+- Updated application and deployment image versions to 1.5.3. Report submission state is included in full backups; older backups remain restorable.
+
+### Fixed
+- Automatically repair overlapping trip odometers without changing stored trip mileage or the rolling OwnTracks checkpoint. Each repaired end equals its start plus saved miles.
+- Keep other trip odometers unchanged when a trip is deleted.
+- Removed duplicate database size and record totals from Diagnostics Hard Drive Space; those values remain in System Status.
+- Require a new PDF after report inputs change or a submitted report is reopened.
+
 ## 1.5.2 - 10.12.2026
 
 ### Added

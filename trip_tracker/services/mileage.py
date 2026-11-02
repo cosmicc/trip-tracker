@@ -17,6 +17,11 @@ from trip_tracker.models import (
     TripProcessingCheckpoint,
     normalize_location_name,
 )
+from trip_tracker.services.report_status import (
+    lock_report_writes,
+    month_is_submitted,
+    require_month_editable,
+)
 from trip_tracker.services.timezone import (
     datetime_to_local_date,
     datetime_to_utc,
@@ -976,6 +981,9 @@ def _add_or_update_trip(
         return None
 
     trip_date = datetime_to_local_date(started_at)
+    lock_report_writes(db)
+    if month_is_submitted(db, trip_date.year, trip_date.month):
+        return None
     if _overlaps_preserved_trip(
         preserved_trips,
         trip_date=trip_date,
@@ -1647,76 +1655,14 @@ def resequence_month_trip_odometers(db: Session, year: int, month: int) -> int:
 
 
 def resequence_month_trip_odometers_from(db: Session, first_trip: Trip) -> int:
-    """Recalculate an edited trip and later trips in its start month only.
+    """Recalculate an edited trip and all later trips, including later months.
 
-    The edited trip keeps its existing start odometer. Existing positive non-trip gaps after that
-    row are captured before any values are changed, then reapplied to the later rows. Trips before
-    the edited row and trips whose start date belongs to another month are never modified.
+    Retain this entry point for existing callers. Clamp an overlapping first start to
+    its predecessor's end and preserve positive non-trip gaps between later rows.
     """
-
-    db.flush()
-    month_trips = _month_trips_ordered(
-        db,
-        first_trip.trip_date.year,
-        first_trip.trip_date.month,
+    return resequence_trip_odometers_from(
+        db, first_trip, start_odometer_source=ODOMETER_SOURCE_PREVIOUS_TRIP
     )
-    ordered_trips = [
-        trip
-        for trip in month_trips
-        if (
-            trip.started_at > first_trip.started_at
-            or (trip.started_at == first_trip.started_at and trip.id >= first_trip.id)
-        )
-    ]
-    if not ordered_trips:
-        return 0
-
-    current_odometer = first_trip.start_odometer_miles
-    if current_odometer is None:
-        previous_trip = _latest_trip_before(db, first_trip.started_at)
-        if previous_trip is not None and previous_trip.end_odometer_miles is not None:
-            current_odometer = previous_trip.end_odometer_miles
-        else:
-            current_odometer = _month_resequence_anchor(db, first_trip)
-    current_odometer = Decimal(current_odometer).quantize(
-        ODOMETER_PRECISION,
-        rounding=ROUND_HALF_UP,
-    )
-    odometer_gaps = _odometer_gaps_for_ordered_trips(ordered_trips)
-    first_start_source = ODOMETER_SOURCE_PREVIOUS_TRIP
-
-    for index, trip in enumerate(ordered_trips):
-        if index > 0:
-            current_odometer = (current_odometer + odometer_gaps[index]).quantize(
-                ODOMETER_PRECISION,
-                rounding=ROUND_HALF_UP,
-            )
-        trip_distance = Decimal(trip.miles).quantize(
-            DISTANCE_PRECISION,
-            rounding=ROUND_HALF_UP,
-        )
-        trip.start_odometer_miles = current_odometer
-        trip.end_odometer_miles = (current_odometer + trip_distance).quantize(
-            ODOMETER_PRECISION,
-            rounding=ROUND_HALF_UP,
-        )
-        trip.start_odometer_source = _resequence_start_source(
-            index=index,
-            first_start_source=first_start_source,
-            odometer_gap=odometer_gaps[index] if index > 0 else Decimal("0.0"),
-        )
-        trip.end_odometer_source = ODOMETER_SOURCE_ESTIMATED
-        current_odometer = trip.end_odometer_miles
-
-    trip_logger.info(
-        "Resequenced edited trip and later same-month odometers from_trip_id=%s trips=%s "
-        "start_odometer=%s end_odometer=%s",
-        first_trip.id,
-        len(ordered_trips),
-        ordered_trips[0].start_odometer_miles,
-        ordered_trips[-1].end_odometer_miles,
-    )
-    return len(ordered_trips)
 
 
 def _reconstructed_non_trip_gap(
@@ -1921,14 +1867,26 @@ def resequence_trip_odometers_from(
     if start_odometer_miles is None:
         start_odometer_miles, start_odometer_source = _manual_trip_start_odometer(db, first_trip)
 
+    predecessor = db.scalar(
+        select(Trip)
+        .where(
+            or_(
+                Trip.started_at < first_trip.started_at,
+                and_(Trip.started_at == first_trip.started_at, Trip.id < first_trip.id),
+            )
+        )
+        .order_by(Trip.started_at.desc(), Trip.id.desc())
+        .limit(1)
+    )
+    if predecessor is not None and predecessor.end_odometer_miles is not None:
+        start_odometer_miles = max(start_odometer_miles, predecessor.end_odometer_miles)
+
     current_odometer = Decimal(start_odometer_miles).quantize(
         ODOMETER_PRECISION,
         rounding=ROUND_HALF_UP,
     )
     first_start_source = (
-        start_odometer_source
-        or first_trip.start_odometer_source
-        or ODOMETER_SOURCE_PREVIOUS_TRIP
+        start_odometer_source or first_trip.start_odometer_source or ODOMETER_SOURCE_PREVIOUS_TRIP
     )
     odometer_gaps = _odometer_gaps_for_ordered_trips(
         ordered_trips,
@@ -1948,14 +1906,15 @@ def resequence_trip_odometers_from(
             ODOMETER_PRECISION,
             rounding=ROUND_HALF_UP,
         )
-        trip.start_odometer_miles = start_odometer
-        trip.end_odometer_miles = end_odometer
-        trip.start_odometer_source = _resequence_start_source(
-            index=index,
-            first_start_source=first_start_source,
-            odometer_gap=odometer_gaps[index],
-        )
-        trip.end_odometer_source = ODOMETER_SOURCE_ESTIMATED
+        if (trip.start_odometer_miles, trip.end_odometer_miles) != (start_odometer, end_odometer):
+            trip.start_odometer_miles = start_odometer
+            trip.end_odometer_miles = end_odometer
+            trip.start_odometer_source = _resequence_start_source(
+                index=index,
+                first_start_source=first_start_source,
+                odometer_gap=odometer_gaps[index],
+            )
+            trip.end_odometer_source = ODOMETER_SOURCE_ESTIMATED
         current_odometer = end_odometer
 
     trip_logger.info(
@@ -1967,6 +1926,45 @@ def resequence_trip_odometers_from(
         ordered_trips[-1].end_odometer_miles,
     )
     return len(ordered_trips)
+
+
+def repair_overlapping_trip_odometers(db: Session) -> int:
+    """Repair trip display continuity without changing mileage or the master checkpoint.
+
+    Valid gaps remain untouched. Submitted report rows are immutable; the background
+    processor skips them and continues from their saved end values.
+    """
+    lock_report_writes(db)
+    trips = _all_trips_ordered(db)
+    previous_end: Decimal | None = None
+    adjusted = 0
+    submitted_months: dict[tuple[int, int], bool] = {}
+    for trip in trips:
+        key = (trip.trip_date.year, trip.trip_date.month)
+        if key not in submitted_months:
+            submitted_months[key] = month_is_submitted(db, *key)
+        start = trip.start_odometer_miles
+        if (
+            submitted_months[key]
+            and start is not None
+            and previous_end is not None
+            and start < previous_end
+        ):
+            require_month_editable(db, *key)
+        if not submitted_months[key] and start is not None:
+            start = max(start, previous_end) if previous_end is not None else start
+            end = (start + trip.miles).quantize(ODOMETER_PRECISION, rounding=ROUND_HALF_UP)
+            if (start, end) != (trip.start_odometer_miles, trip.end_odometer_miles):
+                trip.start_odometer_miles = start
+                trip.end_odometer_miles = end
+                trip.start_odometer_source = ODOMETER_SOURCE_ESTIMATED
+                trip.end_odometer_source = ODOMETER_SOURCE_ESTIMATED
+                adjusted += 1
+        if trip.end_odometer_miles is not None:
+            previous_end = trip.end_odometer_miles
+    if adjusted:
+        trip_logger.info("Repaired overlapping trip display odometers trips=%s", adjusted)
+    return adjusted
 
 
 def backfill_missing_trip_odometers(db: Session) -> int:
@@ -1986,6 +1984,8 @@ def backfill_missing_trip_odometers(db: Session) -> int:
     )
     updated_count = 0
     for trip in trips:
+        if month_is_submitted(db, trip.trip_date.year, trip.trip_date.month):
+            continue
         odometer_anchor = _odometer_anchor_for_trip_start(db, trip.started_at)
         calculation = _estimated_odometer_calculation(
             Decimal(trip.miles),
@@ -1996,15 +1996,11 @@ def backfill_missing_trip_odometers(db: Session) -> int:
                 else None
             ),
             end_odometer_miles=(
-                Decimal(trip.end_odometer_miles)
-                if trip.end_odometer_miles is not None
-                else None
+                Decimal(trip.end_odometer_miles) if trip.end_odometer_miles is not None else None
             ),
             start_odometer_source=trip.start_odometer_source,
             end_odometer_source=trip.end_odometer_source,
-            odometer_anchor_miles=(
-                odometer_anchor.miles if odometer_anchor is not None else None
-            ),
+            odometer_anchor_miles=(odometer_anchor.miles if odometer_anchor is not None else None),
             odometer_anchor_source=(
                 odometer_anchor.source if odometer_anchor is not None else None
             ),
@@ -2237,6 +2233,7 @@ def generate_trips(
         last_arrival = transition
         pending_leave = None
 
+    repair_overlapping_trip_odometers(db)
     db.commit()
     for trip in generated:
         db.refresh(trip)

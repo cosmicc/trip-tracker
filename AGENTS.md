@@ -219,7 +219,9 @@ backward-compatibility handling.
    trip start, and ends are start plus the selected trip distance. If only a later master
    checkpoint is available, missing generated-trip odometers may be estimated from retained
    OwnTracks path rows between the trip start and that checkpoint. Generated trips must not use
-   prior trip end odometers as the source for a new trip start. A trip that crosses local midnight
+   prior trip end odometers as the OwnTracks calculation source. Before commit, continuity repair
+   floors overlapping display starts at the preceding trip end and sets display ends to start plus
+   saved miles without changing the master checkpoint. A trip that crosses local midnight
    belongs to the local day on which it started; include OwnTracks path rows through its actual
    destination arrival after midnight.
 6. Trip is stored and shown on `/trips` page for review/editing
@@ -365,9 +367,11 @@ dates. Manual trips are not restricted by those indexes.
 - Existing trip rows display trip dates and odometers as read-only values. Row update forms accept
   selected origin/destination waypoint IDs from dropdowns plus mileage edits; posted dates,
   free-text names, and odometer fields are not accepted for existing rows.
-- A distance edit keeps the edited trip's existing start odometer and recalculates only that trip
-  and later trips in the same start month. Do not change earlier trips or any other month, and never
-  change another trip's stored distance.
+- A distance edit clamps the edited trip start to at least the preceding trip end and recalculates
+  that trip and later trips across month boundaries, preserving positive non-trip gaps and every
+  other trip's stored mileage. Earlier trips remain unchanged. A submitted month that would be
+  changed blocks the entire transaction until it is explicitly unsubmitted. Deletion never
+  resequences other trips.
 - The Work Trips page month selector is a single browser month/year picker. It defaults to the app's
   current `LOCAL_TIMEZONE` month, auto-loads the selected month, and displays the month as
   `Showing June 2026 (06/2026)` style text under the Work Trips title.
@@ -506,7 +510,7 @@ dates. Manual trips are not restricted by those indexes.
    and the event row's rolling odometer when available.
 9. Diagnostics shows the app version in the Application card, shows hard drive space for key
    runtime paths, combines paths into one row when exact used bytes and total bytes match, and
-   includes current database size plus total app record count at the bottom of the card.
+   keeps database size and total app record count exclusively in System Status.
 10. Trip calculation details logged to `trip_tracker.trip_calculation` logger
 
 ---
@@ -647,6 +651,7 @@ See [INSTALL.md](INSTALL.md) for complete Docker and Portainer setup guide.
 
 These specialized guides help AI agents with common development tasks:
 
+- **[SKILL-monthly-reports.md](.vscode/SKILL-monthly-reports.md)** — PDF downloads, submission locks, concurrent writes, and report-data protection
 - **[SKILL-trip-processor.md](.vscode/SKILL-trip-processor.md)** — Automatic trip generation, event sequences, odometer checkpoint, debugging trip detection
 - **[SKILL-database-migrations.md](.vscode/SKILL-database-migrations.md)** — Adding database fields, creating Alembic migrations, schema changes, rollback patterns
 - **[SKILL-mileage-calculation.md](.vscode/SKILL-mileage-calculation.md)** — Mileage priority system, Haversine distance, odometer estimation, trip editing, resequencing logic
@@ -660,3 +665,11 @@ These specialized guides help AI agents with common development tasks:
 - [INSTALL.md](INSTALL.md) — Docker, Ubuntu, Portainer installation guide
 - [CHANGELOG.md](CHANGELOG.md) — Release history and breaking changes
 - [pyproject.toml](pyproject.toml) — Dependencies and build configuration
+
+### Monthly report submission and odometer continuity (1.5.3)
+
+Use [the monthly reports guide](.vscode/SKILL-monthly-reports.md) for persistent PDF evidence,
+submission eligibility, shared write locks, submitted-month maintenance, and backup compatibility.
+Mileage edits and overlap repairs preserve stored mileage and the master checkpoint. They move
+trip display odometers forward as needed across months; submitted affected months must be reopened
+first. Deletion never resequences other trips. The approved palette remains unchanged.

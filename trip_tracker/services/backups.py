@@ -20,6 +20,7 @@ from sqlalchemy.sql.sqltypes import Date, DateTime, Numeric
 
 from trip_tracker import database
 from trip_tracker.models import Base, Site
+from trip_tracker.services.report_status import lock_report_writes
 from trip_tracker.services.timezone import datetime_to_local
 from trip_tracker.services.waypoints import owntracks_waypoints_export
 
@@ -346,6 +347,7 @@ def restore_full_backup(db: Session, content: bytes) -> RestoreSummary:
 
     with _BACKUP_RESTORE_LOCK:
         try:
+            lock_report_writes(db)
             _lock_postgresql_tables(db)
             for table in reversed(BACKUP_TABLES):
                 db.execute(table.delete().execution_options(synchronize_session=False))
@@ -577,14 +579,16 @@ def _validated_table_rows(payload: dict[str, Any]) -> dict[str, list[dict[str, A
     if not isinstance(tables_payload, dict):
         raise BackupValidationError("Backup does not contain a tables object.")
 
-    missing_tables = set(BACKUP_TABLE_NAMES) - set(tables_payload)
+    missing_tables = set(BACKUP_TABLE_NAMES) - set(tables_payload) - {"monthly_report_statuses"}
     if missing_tables:
         missing = ", ".join(sorted(missing_tables))
         raise BackupValidationError(f"Backup is missing required tables: {missing}.")
 
     rows_by_table: dict[str, list[dict[str, Any]]] = {}
     for table in BACKUP_TABLES:
-        raw_rows = tables_payload.get(table.name)
+        raw_rows = tables_payload.get(
+            table.name, [] if table.name == "monthly_report_statuses" else None
+        )
         if not isinstance(raw_rows, list):
             raise BackupValidationError(f"Backup table {table.name} must be a list.")
         rows_by_table[table.name] = [

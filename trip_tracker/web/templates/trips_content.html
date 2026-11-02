@@ -19,11 +19,29 @@
         >
       </label>
     </form>
-    <form action="/reports/{{ year }}/{{ month }}" method="post">
+    <form action="/reports/{{ year }}/{{ month }}" method="post" data-report-download>
       <button type="submit">Download PDF Report</button>
+    </form>
+    <form action="/reports/{{ year }}/{{ month }}/submission" method="post">
+      <input type="hidden" name="submitted" value="{{ 'false' if report_submitted else 'true' }}">
+      <button type="submit" {% if not report_submitted and not report_can_submit %}disabled{% endif %}>
+        {{ 'Mark Unsubmitted' if report_submitted else 'Mark Submitted for Reimbursement' }}
+      </button>
     </form>
   </div>
 </section>
+
+<div class="panel-meta report-submission-status" role="status" aria-live="polite" data-report-status>
+  {% if report_submitted %}
+  Submitted for reimbursement on {{ report_submitted_at|local_datetime }}. This month is locked. Mark it unsubmitted to make changes.
+  {% elif not report_month_complete %}
+  Not submitted. Submission becomes available after this month ends and you download its PDF report.
+  {% elif not report_downloaded %}
+  Not submitted. Download a fresh PDF report, then mark it submitted after sending it to your employer.
+  {% else %}
+  PDF downloaded. Ready to mark submitted after sending the report to your employer.
+  {% endif %}
+</div>
 
 <section class="trips-summary-grid" aria-label="Selected month summary">
   <div class="trip-summary-card trip-summary-card-primary">
@@ -90,7 +108,7 @@
         </td>
         <td class="trip-name">
           {% set origin_display_name = trip.origin_display_name %}
-          <select form="{{ form_id }}" class="waypoint-select" name="origin_site_id" required>
+          <select form="{{ form_id }}" class="waypoint-select" name="origin_site_id" required {% if report_submitted %}disabled{% endif %}>
             <option value="" disabled {% if trip.origin_site_id is none and origin_display_name not in waypoint_names %}selected{% endif %}>Select waypoint</option>
             {% for waypoint in waypoints %}
             <option value="{{ waypoint.id }}" {% if waypoint.id == trip.origin_site_id or (trip.origin_site_id is none and waypoint.name == origin_display_name) %}selected{% endif %}>{{ waypoint.name }}</option>
@@ -99,7 +117,7 @@
         </td>
         <td class="trip-name">
           {% set destination_display_name = trip.destination_display_name %}
-          <select form="{{ form_id }}" class="waypoint-select" name="destination_site_id" required>
+          <select form="{{ form_id }}" class="waypoint-select" name="destination_site_id" required {% if report_submitted %}disabled{% endif %}>
             <option value="" disabled {% if trip.destination_site_id is none and destination_display_name not in waypoint_names %}selected{% endif %}>Select waypoint</option>
             {% for waypoint in waypoints %}
             <option value="{{ waypoint.id }}" {% if waypoint.id == trip.destination_site_id or (trip.destination_site_id is none and waypoint.name == destination_display_name) %}selected{% endif %}>{{ waypoint.name }}</option>
@@ -116,14 +134,14 @@
         </td>
         <td>
           <div class="miles-edit-cell">
-            <input form="{{ form_id }}" class="miles-input" type="number" name="miles" min="0" step="0.1" required value="{{ "%.1f"|format(trip.miles) }}">
+            <input form="{{ form_id }}" class="miles-input" type="number" name="miles" min="0" step="0.1" required value="{{ "%.1f"|format(trip.miles) }}" {% if report_submitted %}disabled{% endif %}>
           </div>
         </td>
         <td>
           <div class="trip-actions">
-            <button class="small-button" form="{{ form_id }}" type="submit">Save</button>
+            <button class="small-button" form="{{ form_id }}" type="submit" {% if report_submitted %}disabled{% endif %}>Save</button>
             <form action="/trips/{{ trip.id }}/delete" method="post">
-              <button class="small-button danger" type="submit">Delete</button>
+              <button class="small-button danger" type="submit" {% if report_submitted %}disabled{% endif %}>Delete</button>
             </form>
           </div>
         </td>
@@ -203,7 +221,7 @@
         name="expense_date"
         value="{{ expense_default_date.isoformat() }}"
         required
-        {% if monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}
+        {% if report_submitted or monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}
       >
     </label>
     <label class="expense-reason-label">
@@ -214,7 +232,7 @@
         name="expense_reason"
         maxlength="160"
         required
-        {% if monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}
+        {% if report_submitted or monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}
       >
     </label>
     <label>
@@ -226,10 +244,10 @@
         min="0.01"
         step="0.01"
         required
-        {% if monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}
+        {% if report_submitted or monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}
       >
     </label>
-    <button type="submit" {% if monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}>Add Expense</button>
+    <button type="submit" {% if report_submitted or monthly_report_expense_slots_remaining <= 0 %}disabled{% endif %}>Add Expense</button>
   </form>
   {% if monthly_report_expense_slots_remaining <= 0 %}
   <p class="empty-state">This month already has the maximum of {{ monthly_report_expense_limit }} extra expenses.</p>
@@ -253,7 +271,7 @@
           <form action="/trips/report-expenses/{{ expense.id }}/delete" method="post">
             <input type="hidden" name="redirect_year" value="{{ year }}">
             <input type="hidden" name="redirect_month" value="{{ month }}">
-            <button class="small-button danger" type="submit">Delete</button>
+            <button class="small-button danger" type="submit" {% if report_submitted %}disabled{% endif %}>Delete</button>
           </form>
         </td>
       </tr>
@@ -295,7 +313,7 @@
           <form action="/trips/suppression/{{ suppressed_trip.id }}/delete" method="post">
             <input type="hidden" name="redirect_year" value="{{ year }}">
             <input type="hidden" name="redirect_month" value="{{ month }}">
-            <button class="small-button danger" type="submit">Remove Record</button>
+            <button class="small-button danger" type="submit" {% if report_submitted %}disabled{% endif %}>Remove Record</button>
           </form>
         </td>
       </tr>
