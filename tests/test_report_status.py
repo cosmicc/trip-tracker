@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from trip_tracker.models import Base, MonthlyReportExpense, MonthlyReportStatus, Trip
+from trip_tracker.models import Base, MonthlyReportExpense, MonthlyReportStatus, Site, Trip
 from trip_tracker.services.backups import create_full_backup, restore_full_backup
 from trip_tracker.services.mileage import (
     delete_trip,
@@ -199,3 +199,26 @@ def test_mileage_decrease_preserves_positive_gap(db):
     assert later.start_odometer_miles == Decimal("1015.0")
     assert later.end_odometer_miles == Decimal("1025.0")
     assert later.miles == Decimal("10.0")
+
+
+def test_legacy_waypoint_names_invalidate_downloads_and_obey_submission_lock(db):
+    """Protect legacy reports that display names from their related waypoint."""
+    site = Site(name="Office", latitude=42, longitude=-83, radius_m=150)
+    db.add(site)
+    db.commit()
+    trip = make_trip(db, date(2026, 10, 29), "1000.0")
+    trip.destination_site_id = site.id
+    trip.destination_name = None
+    db.commit()
+    record_report_download(db, 2026, 10)
+    site.name = "New Office"
+    db.commit()
+    with pytest.raises(HTTPException, match="fresh PDF"):
+        set_report_submitted(db, 2026, 10, True)
+    record_report_download(db, 2026, 10)
+    set_report_submitted(db, 2026, 10, True)
+    site.name = "Another Office"
+    with pytest.raises(HTTPException, match="submitted"):
+        db.commit()
+    db.rollback()
+    assert site.name == "New Office"

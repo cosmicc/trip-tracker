@@ -22,7 +22,9 @@ maintenance that could affect a submitted report.
   download evidence. Responses use `Cache-Control: no-store`.
 - Submission takes the same lock. `Session.before_flush` guards submitted trip, expense,
   deleted-trip, and monthly gas rows for all ORM writers, including indirect odometer changes.
-  Keep this guard imported by app and CLI writing paths. An affected submitted month rejects the
+  Legacy trip names that fall back to waypoint names are included in fingerprints; relevant
+  waypoint renames/deletions must also respect submitted-month locks. Keep this guard imported
+  by app and CLI writing paths. An affected submitted month rejects the
   whole edit transaction until explicitly unsubmitted.
 - Bulk/Core writes bypass ORM guards. Do not use them for normal report edits. Full backup restore
   remains an explicitly confirmed whole-database replacement operation.

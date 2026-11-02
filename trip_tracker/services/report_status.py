@@ -5,8 +5,8 @@ import json
 from datetime import UTC, date, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import event, inspect, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, event, func, inspect, or_, select, text
+from sqlalchemy.orm import Session, joinedload
 
 from trip_tracker.config import get_settings
 from trip_tracker.models import (
@@ -14,6 +14,7 @@ from trip_tracker.models import (
     MonthlyGasPrice,
     MonthlyReportExpense,
     MonthlyReportStatus,
+    Site,
     Trip,
 )
 from trip_tracker.services.timezone import local_today
@@ -89,6 +90,19 @@ def report_fingerprint(db: Session, year: int, month: int) -> str:
                 for row in rows
             ]
         )
+    # Legacy rows may display a waypoint's current name instead of a stored trip name.
+    trips = db.scalars(
+        select(Trip)
+        .options(
+            joinedload(Trip.origin_site),
+            joinedload(Trip.destination_site),
+        )
+        .where(Trip.trip_date >= start, Trip.trip_date < end)
+        .order_by(Trip.id)
+    )
+    data.append(
+        [(trip.id, trip.origin_display_name, trip.destination_display_name) for trip in trips]
+    )
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
@@ -134,6 +148,28 @@ def protect_submitted_report_rows(db: Session, _context: object, _instances: obj
     """Enforce report locks for every ORM writer, including maintenance and API paths."""
     months: set[tuple[int, int]] = set()
     for row in db.new.union(db.dirty).union(db.deleted):
+        if isinstance(row, Site) and row.id is not None:
+            if row not in db.deleted and not inspect(row).attrs.name.history.has_changes():
+                continue
+            affected = db.scalars(
+                select(Trip).where(
+                    or_(
+                        and_(
+                            Trip.origin_site_id == row.id,
+                            or_(Trip.origin_name.is_(None), func.trim(Trip.origin_name) == ""),
+                        ),
+                        and_(
+                            Trip.destination_site_id == row.id,
+                            or_(
+                                Trip.destination_name.is_(None),
+                                func.trim(Trip.destination_name) == "",
+                            ),
+                        ),
+                    )
+                )
+            )
+            months.update((trip.trip_date.year, trip.trip_date.month) for trip in affected)
+            continue
         if not isinstance(row, (Trip, DeletedTrip, MonthlyReportExpense, MonthlyGasPrice)):
             continue
         if row in db.dirty and not db.is_modified(row, include_collections=False):
